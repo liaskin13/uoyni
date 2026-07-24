@@ -126,3 +126,22 @@ may differ.
 **Context:** A proper fix is a local Wrangler dev instance (`wrangler dev` against a local/test D1 + R2) that CI spins up, so tests hit an actual isolated backend instead of requiring every spec author to remember to intercept `/tracks/*` by hand. Until then: any new E2E test touching track data MUST route through `mockTracksApi` (or an equivalent precise mock) — never assume the dev server's network calls are safe by default.
 
 **Depends on:** Nothing technical — mostly a matter of prioritizing the Wrangler-dev CI setup work.
+
+---
+
+### FULL BOIL: complete coverage closure for beat-quantize/beatgrid branch
+
+**Priority:** Medium
+**Blocked by:** nothing — explicitly deferred out of the `feat/beat-quantize-grid` ship to keep that branch scoped to its own feature risk, not repo-wide test-infra debt.
+
+**What:** The "boil the ocean" option L asked about during that branch's `/ship` coverage gate (2026-07-24), declined in favor of shipping with the scoped/recommended coverage. Full closure means:
+
+1. `handleOctaveCorrect`/`handleBeatGridPointsChange` rollback/failure-path tests in `ArchitectConsole.jsx` — needs a render strategy for a meaningful slice of that 4000+ line component; no existing precedent in this repo.
+2. `waveformAnalyzer.js` orchestration tests — verify `detectTempoSegments`/`dpBeatTrack` are actually wired correctly into `generateAndUploadWaveformV2`, not just the pure-function unit tests that already exist for the underlying math.
+3. `DeckWaveformV2`'s drag-mouse anchor state machine — only keyboard nav + double-click insert are covered today (`DeckWaveformV2.beatgrid.test.js`); mouse drag-to-move is untested.
+4. Worker-layer tests for the PATCH `/tracks/:id` allowlist additions in `worker/upload-worker.js` — there are zero worker tests anywhere in this repo currently, so this is really "stand up worker test infra," not a small addition.
+5. The actual isolated E2E test backend (see "Isolated E2E test backend" item above) — a local Wrangler dev instance against test D1/R2, replacing the `page.route()` interception workaround.
+
+**Why deferred:** Most of this (items 4 and 5 especially) is pre-existing repo-wide test-infra debt, not something the beat-quantize/beatgrid branch introduced — pulling it into that branch's ship would have scope-crept a feature PR into an infra PR.
+
+**Context:** Not urgent, but flagged explicitly so it doesn't get lost — pick up as its own dedicated session/PR.
