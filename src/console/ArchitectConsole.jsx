@@ -167,6 +167,26 @@ export async function moveTrackToVault(id, vault) {
   if (!res.ok) throw new Error(`Move failed for track ${id}: HTTP ${res.status}`);
 }
 
+// Extracted for unit testing — resolves a track's flat BPM from manually-entered
+// metadata only (bpm_display wins over bpm; range strings like "70-119" use
+// the first value). Returns null when no valid BPM can be parsed.
+export function resolveTrackBpm(track) {
+  const source = track?.bpm_display || track?.bpm;
+  const parsed = parseFloat(String(source || "").split("-")[0]);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+// Extracted for unit testing — snaps timeSec to the nearest beat boundary.
+// bpmAt is a resolver function, not a raw number, so position-aware lookups
+// (multi-point beatgrid, Part 3) can slot in later without touching call sites.
+// No-ops (returns timeSec unchanged) when bpmAt(timeSec) is falsy.
+export function quantizeToBeat(timeSec, bpmAt, offsetSec = 0) {
+  const bpm = bpmAt(timeSec);
+  if (!bpm) return timeSec;
+  const beatSeconds = 60 / bpm;
+  return offsetSec + Math.round((timeSec - offsetSec) / beatSeconds) * beatSeconds;
+}
+
 function vaultLabel(id) {
   if (!id) return "—";
   if (id.startsWith(LOCKBOX_PREFIX))
@@ -363,6 +383,7 @@ function ArchitectConsole({
   const [waveformDetail, setWaveformDetail] = useState("high");
   const [trackColorRows, setTrackColorRows] = useState(true);
   const [autoLoopDefault, setAutoLoopDefault] = useState(false);
+  const [quantizeEnabled, setQuantizeEnabled] = useState(false);
   const [selectedTrackIds, setSelectedTrackIds] = useState(new Set());
   const [publishFilter, setPublishFilter] = useState("all");
   const [publishState, setPublishState] = useState({
@@ -1555,7 +1576,9 @@ function ArchitectConsole({
       announce(`Jumped to hot cue ${displayNum}.`);
     } else {
       // Set new cue at current time
-      const time = currentTime;
+      const time = quantizeEnabled
+        ? quantizeToBeat(currentTime, () => resolveTrackBpm(loadedTrack))
+        : currentTime;
       const updated = {
         ...hotCues,
         [trackId]: {
@@ -1651,12 +1674,6 @@ function ArchitectConsole({
     announce("Loop cleared.");
   };
 
-  const resolveTrackBpm = (track) => {
-    const source = track?.bpm_display || track?.bpm;
-    const parsed = parseFloat(String(source || "").split("-")[0]);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-  };
-
   const resolveLoopBeats = (option) => {
     if (option.type === "bars") return (option.bars || 0) * 4;
     if (option.type === "beats") return option.beats || 0;
@@ -1676,7 +1693,9 @@ function ArchitectConsole({
     const beats = resolveLoopBeats(option);
     if (!beats) return;
     const beatSeconds = 60 / bpm;
-    const start = currentTime;
+    const start = quantizeEnabled
+      ? quantizeToBeat(currentTime, () => bpm)
+      : currentTime;
     const end = start + beats * beatSeconds;
     setLoopRegion({ start, end });
     loopActiveRef.current = true;
@@ -3708,6 +3727,8 @@ function ArchitectConsole({
             members={members}
             trackColorRows={trackColorRows}
             setTrackColorRows={setTrackColorRows}
+            quantizeEnabled={quantizeEnabled}
+            handleQuantizeToggle={() => setQuantizeEnabled((p) => !p)}
             autoLoopDefault={autoLoopDefault}
             setAutoLoopDefault={setAutoLoopDefault}
             smartCrates={smartCrates}
@@ -3753,6 +3774,15 @@ function ArchitectConsole({
               </section>
               <section className="arch-settings-section">
                 <h4 className="arch-settings-title">PLAYBACK</h4>
+                <div className="arch-settings-row">
+                  <span>Quantize</span>
+                  <button
+                    className={`arch-settings-toggle ${quantizeEnabled ? "active" : ""}`}
+                    onClick={() => setQuantizeEnabled((p) => !p)}
+                  >
+                    {quantizeEnabled ? "ON" : "OFF"}
+                  </button>
+                </div>
                 <div className="arch-settings-row">
                   <span>Auto Loop Default</span>
                   <button
