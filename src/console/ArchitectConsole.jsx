@@ -3431,9 +3431,25 @@ function ArchitectConsole({
                                   {Math.round((t.detected_bpm_confidence ?? 0) * 100)}%
                                 </span>
                               )}
-                            <span onDoubleClick={(e) => handleEditStart(e, t)}>
+                            <span
+                              onDoubleClick={(e) => handleEditStart(e, t)}
+                              className={
+                                !cleanBpm(t.bpm_display) &&
+                                !t.bpm &&
+                                t.detected_bpm != null &&
+                                t.detected_bpm_confidence < DETECTED_BPM_CONFIDENCE_THRESHOLD
+                                  ? "arch-bpm-unverified"
+                                  : undefined
+                              }
+                            >
                               {cleanBpm(t.bpm_display) ||
-                                (t.bpm ? Math.round(Number(t.bpm)) : "—")}
+                                (t.bpm
+                                  ? Math.round(Number(t.bpm))
+                                  : resolveTrackBpm(t)
+                                    ? Math.round(resolveTrackBpm(t))
+                                    : t.detected_bpm != null
+                                      ? Math.round(t.detected_bpm)
+                                      : "—")}
                             </span>
                             {!cleanBpm(t.bpm_display) &&
                               !t.bpm &&
@@ -3443,6 +3459,7 @@ function ArchitectConsole({
                                 <span className="arch-octave-controls">
                                   <button
                                     type="button"
+                                    aria-label="Halve detected BPM (octave correction)"
                                     className={`god-btn arch-octave-btn ${octaveCorrectError[t.id] ? "arch-octave-error" : ""}`}
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -3454,6 +3471,7 @@ function ArchitectConsole({
                                   </button>
                                   <button
                                     type="button"
+                                    aria-label="Double detected BPM (octave correction)"
                                     className={`god-btn arch-octave-btn ${octaveCorrectError[t.id] ? "arch-octave-error" : ""}`}
                                     onClick={(e) => {
                                       e.stopPropagation();

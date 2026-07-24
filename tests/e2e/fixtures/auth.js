@@ -9,7 +9,12 @@ const RESIDENT_CODES = { D: "3865", L: "7677" };
 // ArchitectConsole; pass "L" for the architect-specific stage/theme.
 export async function loginToConsole(page, owner = "D") {
   await page.goto("/");
+  // Wait for the entry screen's window-level keydown listener to actually be
+  // attached before typing — typing immediately after goto() races the
+  // React mount and can drop keystrokes, an intermittent flake independent
+  // of the app itself.
+  await page.locator(".entry-wordmark").waitFor({ state: "visible", timeout: 10_000 });
   await page.keyboard.type(RESIDENT_CODES[owner]);
   await page.keyboard.press("Enter");
-  await page.getByText("LOAD DECK").waitFor({ state: "visible", timeout: 10_000 });
+  await page.getByText("LOAD DECK").waitFor({ state: "visible", timeout: 15_000 });
 }

@@ -2257,6 +2257,14 @@
   letter-spacing: 0.04em;
 }
 
+/* Raw below-threshold detected_bpm shown so the octave double/halve buttons
+   have visible feedback to correct — italicized + dimmed to read as "an
+   unverified guess", distinct from a trusted resolved BPM number. */
+.arch-bpm-unverified {
+  font-style: italic;
+  opacity: 0.55;
+}
+
 .arch-octave-controls {
   display: inline-flex;
   gap: 2px;

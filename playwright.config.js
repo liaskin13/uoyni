@@ -2,8 +2,18 @@ import { defineConfig, devices } from "@playwright/test";
 
 // Minimal Playwright setup — one smoke test proves the harness works
 // (rides alongside the Quantize feature per /plan-eng-review D12b).
-// Full E2E spec set (Quantize/detector/beatgrid flows) lands after the
-// beatgrid editor UI is stable — see TODOS.md / plan T9.
+//
+// !! SAFETY: this repo's .env points VITE_UPLOAD_WORKER_URL at the REAL
+// production Cloudflare Worker (psc-upload-worker.psoulc.workers.dev), not
+// a local/mock backend. There is no isolated test environment — every test
+// here runs against D's real production data. Read-only flows (login,
+// navigation, reading track state) and client-local-only state (Quantize
+// toggle — session React state; hot cues — localStorage only) are safe.
+// NEVER write a test that triggers a PATCH /tracks/:id (octave-correct,
+// beatgrid anchor drag/insert, any inline-edit save) — CI runs this suite
+// on every push/PR, and a write-triggering test would corrupt real track
+// metadata on a schedule, not just once. See TODOS.md for the isolated
+// test-backend gap this constraint is standing in for.
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
