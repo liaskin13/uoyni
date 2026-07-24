@@ -3941,6 +3941,8 @@ function ArchitectConsole({
           <AdminSettings
             onClose={toggleSettings}
             members={members}
+            waveformDetail={waveformDetail}
+            setWaveformDetail={setWaveformDetail}
             trackColorRows={trackColorRows}
             setTrackColorRows={setTrackColorRows}
             quantizeEnabled={quantizeEnabled}
