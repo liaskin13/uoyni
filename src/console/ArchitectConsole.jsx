@@ -167,13 +167,26 @@ export async function moveTrackToVault(id, vault) {
   if (!res.ok) throw new Error(`Move failed for track ${id}: HTTP ${res.status}`);
 }
 
-// Extracted for unit testing — resolves a track's flat BPM from manually-entered
-// metadata only (bpm_display wins over bpm; range strings like "70-119" use
-// the first value). Returns null when no valid BPM can be parsed.
+// Below this, a detected_bpm is stored for reference but never surfaced as
+// the track's BPM — show nothing rather than a wrong number (plan D4).
+export const DETECTED_BPM_CONFIDENCE_THRESHOLD = 0.6;
+
+// Extracted for unit testing — resolves a track's BPM. Manual entry
+// (bpm_display, then bpm) always wins; falls back to the offline detector's
+// result only when confidence clears DETECTED_BPM_CONFIDENCE_THRESHOLD.
+// Returns null when no valid BPM can be resolved by any path.
 export function resolveTrackBpm(track) {
   const source = track?.bpm_display || track?.bpm;
   const parsed = parseFloat(String(source || "").split("-")[0]);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+
+  if (
+    track?.detected_bpm != null &&
+    track?.detected_bpm_confidence >= DETECTED_BPM_CONFIDENCE_THRESHOLD
+  ) {
+    return track.detected_bpm;
+  }
+  return null;
 }
 
 // Extracted for unit testing — snaps timeSec to the nearest beat boundary.
@@ -432,6 +445,7 @@ function ArchitectConsole({
   const [loadedTrack, setLoadedTrack] = useState(null);
   const [regeneratingWaveforms, setRegeneratingWaveforms] = useState({});
   const [waveformProgress, setWaveformProgress] = useState({}); // trackId → 0-100
+  const [octaveCorrectError, setOctaveCorrectError] = useState({}); // trackId → transient error-flash flag
   const waveformQueueRef = useRef([]); // pending trackIds for sequential auto-gen
   const waveformQueueRunning = useRef(false);
 
@@ -1188,16 +1202,18 @@ function ArchitectConsole({
       announce(`Analyzing waveform for ${track.title || "track"}…`);
 
     try {
-      const { bars, duration } = await generateAndUploadWaveformV2(
-        track.id,
-        url,
-        (pct) => {
-          setWaveformProgress((prev) => ({ ...prev, [track.id]: pct }));
-          if (shouldAnnounce && pct % 25 === 0 && pct > 0) {
-            announce(`Waveform ${pct}% — ${track.title || "track"}`);
-          }
-        },
-      );
+      const {
+        bars,
+        duration,
+        detectedBpm,
+        detectedBeatOffset,
+        detectedBpmConfidence,
+      } = await generateAndUploadWaveformV2(track.id, url, (pct) => {
+        setWaveformProgress((prev) => ({ ...prev, [track.id]: pct }));
+        if (shouldAnnounce && pct % 25 === 0 && pct > 0) {
+          announce(`Waveform ${pct}% — ${track.title || "track"}`);
+        }
+      });
 
       waveformBarsCache.current[track.id] = bars;
       if (loadedDeckIdRef.current === track.id) {
@@ -1211,15 +1227,27 @@ function ArchitectConsole({
       if (shouldAnnounce)
         announce(`Waveform ready for ${track.title || "track"}.`);
       try {
+        // Always persist the raw detection result, even below-confidence-threshold —
+        // resolveTrackBpm() gates whether it's *surfaced*, this just stores it (D4/D7).
         await saveWaveform(track.id, WAVEFORM_V2_SENTINEL, duration, {
           waveform_generated_at: new Date().toISOString(),
           waveform_error: null,
+          detected_bpm: detectedBpm,
+          detected_beat_offset: detectedBeatOffset,
+          detected_bpm_confidence: detectedBpmConfidence,
         });
         if (duration != null) {
           setTrackListData((prev) =>
             prev.map((t) =>
               t.id === track.id
-                ? { ...t, duration, waveform_data: WAVEFORM_V2_SENTINEL }
+                ? {
+                    ...t,
+                    duration,
+                    waveform_data: WAVEFORM_V2_SENTINEL,
+                    detected_bpm: detectedBpm,
+                    detected_beat_offset: detectedBeatOffset,
+                    detected_bpm_confidence: detectedBpmConfidence,
+                  }
                 : t,
             ),
           );
@@ -1493,6 +1521,47 @@ function ArchitectConsole({
         }
         announceStatus("Save failed — check console for details.", "error");
       });
+  };
+
+  // Octave-error correction (plan D8): a one-click fix for the known DP
+  // beat-tracker limitation where 90 BPM and 180 BPM fit the rhythm equally
+  // well. detected_beat_offset does NOT need re-deriving — the originally
+  // detected beat position is still a valid beat on the corrected grid
+  // (halving/doubling just changes how many of the grid's beats "count").
+  const handleOctaveCorrect = async (track, factor) => {
+    const originalTrack = trackListData.find((t) => t.id === track.id);
+    const newBpm = Math.round(track.detected_bpm * factor * 100) / 100;
+
+    setTrackListData((prev) =>
+      prev.map((t) => (t.id === track.id ? { ...t, detected_bpm: newBpm } : t)),
+    );
+
+    try {
+      const res = await fetch(`${UPLOAD_WORKER_URL}/tracks/${track.id}`, {
+        method: "PATCH",
+        headers: {
+          "PSC-Secret": UPLOAD_SECRET,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ detected_bpm: newBpm }),
+      });
+      if (!res.ok) throw new Error(`[PSC] octave correct PATCH ${res.status}`);
+      const result = await res.json().catch(() => ({}));
+      if (!result.success) throw new Error("[PSC] octave correct: D1 returned success=false");
+    } catch (err) {
+      console.error("[PSC] octave correction failed:", err);
+      setOctaveCorrectError((prev) => ({ ...prev, [track.id]: true }));
+      setTimeout(
+        () => setOctaveCorrectError((prev) => ({ ...prev, [track.id]: false })),
+        400, // matches DESIGN.md's "long" motion timing for the error flash
+      );
+      if (originalTrack) {
+        setTrackListData((prev) =>
+          prev.map((t) => (t.id === track.id ? originalTrack : t)),
+        );
+      }
+      announceStatus("Octave correction failed — check console for details.", "error");
+    }
   };
 
   const handleEditKeyDown = (e, trackId) => {
@@ -3264,10 +3333,53 @@ function ArchitectConsole({
                             maxLength={20}
                           />
                         ) : (
-                          <span onDoubleClick={(e) => handleEditStart(e, t)}>
-                            {cleanBpm(t.bpm_display) ||
-                              (t.bpm ? Math.round(Number(t.bpm)) : "—")}
-                          </span>
+                          <>
+                            {!cleanBpm(t.bpm_display) &&
+                              !t.bpm &&
+                              t.detected_bpm != null && (
+                                <span
+                                  className="arch-detected-bpm-badge"
+                                  aria-label={`Detected BPM confidence: ${Math.round((t.detected_bpm_confidence ?? 0) * 100)}%`}
+                                >
+                                  CONF{" "}
+                                  {Math.round((t.detected_bpm_confidence ?? 0) * 100)}%
+                                </span>
+                              )}
+                            <span onDoubleClick={(e) => handleEditStart(e, t)}>
+                              {cleanBpm(t.bpm_display) ||
+                                (t.bpm ? Math.round(Number(t.bpm)) : "—")}
+                            </span>
+                            {!cleanBpm(t.bpm_display) &&
+                              !t.bpm &&
+                              t.detected_bpm != null &&
+                              t.detected_bpm_confidence <
+                                DETECTED_BPM_CONFIDENCE_THRESHOLD && (
+                                <span className="arch-octave-controls">
+                                  <button
+                                    type="button"
+                                    className={`god-btn arch-octave-btn ${octaveCorrectError[t.id] ? "arch-octave-error" : ""}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOctaveCorrect(t, 0.5);
+                                    }}
+                                    title="Halve detected BPM (octave correction)"
+                                  >
+                                    ½×
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`god-btn arch-octave-btn ${octaveCorrectError[t.id] ? "arch-octave-error" : ""}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOctaveCorrect(t, 2);
+                                    }}
+                                    title="Double detected BPM (octave correction)"
+                                  >
+                                    2×
+                                  </button>
+                                </span>
+                              )}
+                          </>
                         )}
                       </span>
                       <span className="arch-track-key" role="cell">

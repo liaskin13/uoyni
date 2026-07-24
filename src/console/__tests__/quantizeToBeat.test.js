@@ -10,7 +10,11 @@ vi.mock("../../config", () => ({
   R2_PUBLIC_URL: "https://r2.example.com",
 }));
 
-import { quantizeToBeat, resolveTrackBpm } from "../ArchitectConsole";
+import {
+  quantizeToBeat,
+  resolveTrackBpm,
+  DETECTED_BPM_CONFIDENCE_THRESHOLD,
+} from "../ArchitectConsole";
 
 describe("resolveTrackBpm", () => {
   it("prefers bpm_display over bpm", () => {
@@ -23,6 +27,37 @@ describe("resolveTrackBpm", () => {
 
   it("parses the first value out of a range string", () => {
     expect(resolveTrackBpm({ bpm_display: "70-119" })).toBe(70);
+  });
+
+  it("falls back to detected_bpm when confidence clears the threshold and no manual entry exists", () => {
+    expect(
+      resolveTrackBpm({ detected_bpm: 122, detected_bpm_confidence: 0.8 }),
+    ).toBe(122);
+  });
+
+  it("does NOT surface detected_bpm below the confidence threshold — shows nothing, not a wrong number", () => {
+    expect(
+      resolveTrackBpm({ detected_bpm: 122, detected_bpm_confidence: 0.3 }),
+    ).toBeNull();
+  });
+
+  it("treats confidence exactly at the threshold as acceptable (>=, not >)", () => {
+    expect(
+      resolveTrackBpm({
+        detected_bpm: 122,
+        detected_bpm_confidence: DETECTED_BPM_CONFIDENCE_THRESHOLD,
+      }),
+    ).toBe(122);
+  });
+
+  it("manual entry always wins over a high-confidence detection", () => {
+    expect(
+      resolveTrackBpm({
+        bpm_display: "128",
+        detected_bpm: 65,
+        detected_bpm_confidence: 0.95,
+      }),
+    ).toBe(128);
   });
 
   it("returns null when no valid BPM is present", () => {

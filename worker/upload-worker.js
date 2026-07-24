@@ -270,7 +270,7 @@ export default {
         }
         const id = url.pathname.split("/")[2];
         const body = await request.json();
-        const allowed = ["title", "artist", "bpm", "bpm_display", "musical_key", "vault"];
+        const allowed = ["title", "artist", "bpm", "bpm_display", "musical_key", "vault", "detected_bpm", "detected_beat_offset", "detected_bpm_confidence"];
         const fields = Object.keys(body).filter(k => allowed.includes(k));
         if (fields.length === 0) {
           return new Response(JSON.stringify({ error: "No valid fields" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -492,7 +492,7 @@ export default {
         }
         const id = url.pathname.split("/")[2];
         const body = await request.json();
-        const { waveform_data, duration, waveform_generated_at, waveform_error } = body;
+        const { waveform_data, duration, waveform_generated_at, waveform_error, detected_bpm, detected_beat_offset, detected_bpm_confidence } = body;
         const waveformValue = waveform_data == null ? null : JSON.stringify(waveform_data);
 
         let sql = "UPDATE tracks SET waveform_data = ?";
@@ -500,6 +500,9 @@ export default {
         if (duration != null) { sql += ", duration = ?"; params.push(duration); }
         if (waveform_generated_at !== undefined) { sql += ", waveform_generated_at = ?"; params.push(waveform_generated_at); }
         if (waveform_error !== undefined) { sql += ", waveform_error = ?"; params.push(waveform_error); }
+        if (detected_bpm !== undefined) { sql += ", detected_bpm = ?"; params.push(detected_bpm); }
+        if (detected_beat_offset !== undefined) { sql += ", detected_beat_offset = ?"; params.push(detected_beat_offset); }
+        if (detected_bpm_confidence !== undefined) { sql += ", detected_bpm_confidence = ?"; params.push(detected_bpm_confidence); }
         sql += " WHERE id = ?";
         params.push(id);
 

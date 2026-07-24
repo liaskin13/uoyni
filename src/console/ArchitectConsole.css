@@ -2241,6 +2241,39 @@
   letter-spacing: 0.04em;
 }
 
+/* Detected-BPM confidence badge — sits left of the BPM digits (read first).
+   Neutral cream/muted always, never red/green-coded by confidence level —
+   matches the VU-meter principle that arc markings are neutral instrument
+   chrome, not identity colors. Rectangular tag, same anatomy as the BPM
+   nixie in the Intake modal. */
+.arch-detected-bpm-badge {
+  display: inline-block;
+  border: 1px solid var(--border, #222222);
+  padding: 1px 4px;
+  margin-right: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.56rem;
+  color: rgba(240, 237, 232, 0.55);
+  letter-spacing: 0.04em;
+}
+
+.arch-octave-controls {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 4px;
+}
+
+.arch-octave-btn {
+  height: 18px;
+  padding: 0 4px;
+  font-size: 0.56rem;
+}
+
+.arch-octave-error {
+  color: var(--error-text, #ff4444) !important;
+  border-color: var(--error-text, #ff4444) !important;
+}
+
 .arch-track-state {
   display: flex;
   align-items: center;

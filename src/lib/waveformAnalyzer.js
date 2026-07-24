@@ -8,6 +8,7 @@
 //   proxy: GET /tracks/:id/waveform-bin            → worker endpoint (CORS-safe, no direct R2)
 
 import { UPLOAD_WORKER_URL, UPLOAD_SECRET } from "../config";
+import { onsetEnvelope, dpBeatTrack } from "./beatDetector";
 
 // Sentinel value stored in D1 waveform_data when a track has V2 binary assets in R2.
 // Use this constant everywhere — never compare against the string literal 'v2'.
@@ -446,14 +447,26 @@ export async function uploadWaveformAssets(trackId, binaryBytes, pngBlob, onProg
   return res.json();
 }
 
+const BEAT_DETECTOR_FRAME_RATE = 50; // must match the barsPerSec passed to analyzeAudio below
+
 /**
  * Full v2 waveform generation: analyze audio, pack to binary, render PNG, upload both to R2.
  * Returns the bars array so callers can use it immediately without re-fetching from R2.
+ *
+ * Beat detection runs as a post-processing step over the already-computed
+ * `bars` array — never a second pass over the audio file. This is what
+ * keeps large-WAV analysis safe (see analyzeAudio()'s chunked-WAV warning)
+ * and avoids doubling network/CPU cost on every Regenerate.
  */
 export async function generateAndUploadWaveformV2(trackId, audioUrl, onProgress) {
   if (onProgress) onProgress(5);
 
   const { high: bars, duration } = await analyzeAudio(audioUrl, null, 80, 50);
+
+  if (onProgress) onProgress(55);
+
+  const envelope = onsetEnvelope(bars);
+  const detected = dpBeatTrack(envelope, { frameRate: BEAT_DETECTOR_FRAME_RATE });
 
   if (onProgress) onProgress(60);
 
@@ -468,5 +481,11 @@ export async function generateAndUploadWaveformV2(trackId, audioUrl, onProgress)
     if (onProgress) onProgress(75 + Math.round(p * 0.25));
   });
 
-  return { bars, duration };
+  return {
+    bars,
+    duration,
+    detectedBpm: detected.bpm,
+    detectedBeatOffset: detected.beatOffsetSec,
+    detectedBpmConfidence: detected.confidence,
+  };
 }
