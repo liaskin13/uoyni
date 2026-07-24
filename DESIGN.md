@@ -287,6 +287,25 @@ Currently renders single-color (played green / unplayed off-white). Targeted for
 - Unplayed: `rgba(240,237,232,0.55)` — warm off-white, not cold grey
 - Ghost (paused): `rgba(240,237,232,0.11)`
 
+### Beatgrid & Quantize (Console-only — DeckWaveformV2)
+
+Shipped 2026-07-24. Real Quantize, offline beat detection, and a multi-point beatgrid — the platform's overlapping-with-pro-DJ-software features must meet or beat rekordbox/Serato (standing bar, confirmed with D). Cue/grid metadata is D's internal production data — console only, **never guest-facing**, same rule as Serato cue labels above.
+
+**Confidence badge:** sits LEFT of the BPM digits (read-first, left-to-right scan order). Rectangular tag, 0px border-radius, `1px solid var(--border)`, `--surface` background — same anatomy as the BPM nixie. Label "CONF" in Chakra Petch 500 8-9px uppercase; number in Space Mono, percentage format ("62%"), no decimal. **Always neutral cream/muted — never red/green-coded by confidence level**, matching the VU-meter principle that arc markings are neutral instrument chrome, not identity colors. Hidden entirely (not dimmed) until a detection has actually run.
+
+**Double/halve octave-correction control:** full `god-btn` pattern — `background: transparent`, `border: 1px solid var(--border)`, Chakra Petch 500 11px 0.12em uppercase, hover → `border-color`/`color: var(--identity)`, 28px height desktop. Renders ONLY when `detected_bpm_confidence` is below the 0.6 threshold — invisible entirely for high-confidence detections, not merely disabled. Corrects the known DP-beat-tracker octave-ambiguity failure mode (90 vs 180 BPM reading equally strong).
+
+**Anchor markers (beatgrid editor):** 6×6px diamonds, three visual states:
+- Idle: `rgba(240,237,232,0.55)` — same warm off-white token as unplayed waveform bars, never cold grey.
+- Focused (keyboard-selected via `[`/`]`, not dragging): identity-colored 1px outline, no fill, no glow — distinct from idle and dragging.
+- Active/dragging: full `var(--identity)` with the existing 200ms glow transition.
+
+Inter-anchor segment line: same `rgba(240,237,232,0.55)` off-white as the idle marker, not `--border` (near-invisible against the void background).
+
+**Playback-state gate:** grid editing (drag/insert) is paused-only. While playing, anchors dim to `opacity: 0.4` and an attempted drag/insert shows a transient inline "PAUSE TO EDIT GRID" label (Chakra Petch 500, small, `--text-secondary`, fading per the standard 120ms motion timing — no modal/toast). Avoids audible glitches from loop/quantize math recalculating mid-playback. Persisted anchor position is the only confirmation on success — no toast, matching "instrument responds, doesn't perform."
+
+**Not settled:** L flagged discomfort with pause-required editing during plan review (2026-07-22) but chose not to relitigate; shipped as the safe v1 default. Revisit if D finds pausing-to-edit genuinely annoying in practice — see TODOS.md.
+
 ---
 
 ## Voice Comments
@@ -479,6 +498,11 @@ INTAKE is a console-level action. The button lives in the browser utility bar (`
 | 2026-06-20 | D'Arsonval amplitude-linear normalization — pow(10, vu/20) not linear-dB | Real VU needle deflects ∝ V_rms. This collapses the 20↔10 gap from 38.5% to 11.4% of sweep, matching analog reference. |
 | 2026-06-20 | Display range −20 to +6 VU (not +3) — 0 VU sits at center | D's mixes run hot; +6 gives earlier warning before clip. Side effect: 0 VU at 47.5% of sweep (center) vs 68.5% on standard face. Intentional. |
 | 2026-06-20 | VU col widened: clamp(380px,38%,520px) desktop | Each canvas ≈260px — enough width for label scale. SA col absorbs shrinkage via flex:1. |
+| 2026-07-24 | Confidence badge always neutral cream, never red/green by confidence level | Matches VU-meter principle: arc markings are neutral instrument chrome, not identity colors. A wrong-but-confident-looking badge would be worse than a plain one. |
+| 2026-07-24 | Octave double/halve control hidden (not disabled) above the 0.6 confidence threshold | Invisible-when-irrelevant beats a dead button. Only surfaces for the exact failure mode it fixes. |
+| 2026-07-24 | Beatgrid anchor editing is paused-only (v1) | Avoids audible glitches from loop/quantize math recalculating mid-playback. L flagged discomfort but didn't relitigate — logged in TODOS.md as not-settled, revisit if D finds it annoying in practice. |
+| 2026-07-24 | Beatgrid anchor idle color = rgba(240,237,232,0.55), same token as unplayed waveform bars | One off-white token for "present but not active" across the whole waveform surface, not a new value invented per element. |
+| 2026-07-24 | Beat/cue grid metadata is console-only, never guest-facing | Same rule as Serato cue labels — D's internal production data, not guest content. |
 
 ---
 
