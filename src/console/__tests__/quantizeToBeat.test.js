@@ -13,8 +13,96 @@ vi.mock("../../config", () => ({
 import {
   quantizeToBeat,
   resolveTrackBpm,
+  resolveBpmAtTime,
   DETECTED_BPM_CONFIDENCE_THRESHOLD,
 } from "../ArchitectConsole";
+
+describe("resolveBpmAtTime — regression parity with resolveTrackBpm (highest-risk path)", () => {
+  it("MANDATORY: with no grid points, produces output identical to resolveTrackBpm for every track shape", () => {
+    const trackShapes = [
+      { bpm_display: "128" },
+      { bpm: 90 },
+      { bpm_display: "70-119" },
+      { detected_bpm: 122, detected_bpm_confidence: 0.8 },
+      { detected_bpm: 122, detected_bpm_confidence: 0.3 },
+      {},
+      null,
+    ];
+    for (const track of trackShapes) {
+      expect(resolveBpmAtTime(track, 42.5)).toBe(resolveTrackBpm(track));
+      expect(resolveBpmAtTime({ ...track, beat_grid_points: null }, 10)).toBe(
+        resolveTrackBpm(track),
+      );
+      expect(resolveBpmAtTime({ ...track, beat_grid_points: "[]" }, 10)).toBe(
+        resolveTrackBpm(track),
+      );
+    }
+  });
+
+  it("falls back to resolveTrackBpm on malformed beat_grid_points JSON rather than throwing", () => {
+    const track = { bpm_display: "128", beat_grid_points: "{not valid json" };
+    expect(() => resolveBpmAtTime(track, 5)).not.toThrow();
+    expect(resolveBpmAtTime(track, 5)).toBe(128);
+  });
+});
+
+describe("resolveBpmAtTime — multi-point grid", () => {
+  const track = {
+    beat_grid_points: JSON.stringify([
+      { time: 10, bpm: 120 },
+      { time: 40, bpm: 140 },
+    ]),
+  };
+
+  it("extends the first anchor's BPM backward for time before it — no 'no tempo' region", () => {
+    expect(resolveBpmAtTime(track, 0)).toBe(120);
+    expect(resolveBpmAtTime(track, 9.999)).toBe(120);
+  });
+
+  it("uses the first anchor's BPM exactly at its own time", () => {
+    expect(resolveBpmAtTime(track, 10)).toBe(120);
+  });
+
+  it("uses the first segment's BPM for time within its range", () => {
+    expect(resolveBpmAtTime(track, 25)).toBe(120);
+  });
+
+  it("switches to the second anchor's BPM exactly at its time", () => {
+    expect(resolveBpmAtTime(track, 40)).toBe(140);
+  });
+
+  it("uses the last anchor's BPM for time past all anchors", () => {
+    expect(resolveBpmAtTime(track, 1000)).toBe(140);
+  });
+
+  it("accepts an already-parsed array (not just a JSON string)", () => {
+    const parsedTrack = {
+      beat_grid_points: [{ time: 0, bpm: 100 }, { time: 20, bpm: 150 }],
+    };
+    expect(resolveBpmAtTime(parsedTrack, 25)).toBe(150);
+  });
+
+  it("ignores malformed anchor entries (missing/non-finite time or bpm) rather than crashing", () => {
+    const messyTrack = {
+      beat_grid_points: [
+        { time: 0, bpm: 100 },
+        { time: "not a number", bpm: 999 },
+        { bpm: 888 },
+        { time: 5 },
+        { time: 20, bpm: 150 },
+      ],
+    };
+    expect(resolveBpmAtTime(messyTrack, 25)).toBe(150);
+    expect(resolveBpmAtTime(messyTrack, 2)).toBe(100);
+  });
+
+  it("sorts out-of-order anchor entries by time before resolving", () => {
+    const unsorted = {
+      beat_grid_points: [{ time: 40, bpm: 140 }, { time: 10, bpm: 120 }],
+    };
+    expect(resolveBpmAtTime(unsorted, 25)).toBe(120);
+  });
+});
 
 describe("resolveTrackBpm", () => {
   it("prefers bpm_display over bpm", () => {

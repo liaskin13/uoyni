@@ -180,3 +180,49 @@ export function dpBeatTrack(envelope, opts = {}) {
     beatTimesSec,
   };
 }
+
+const DRIFT_WINDOW_BEATS = 16; // ~4 bars — enough beats per window for a stable average
+const DRIFT_THRESHOLD_PCT = 4; // matches typical live-mix tempo-drift tolerance before it's audible
+
+/**
+ * Detects genuine tempo drift across a track from the DP tracker's own beat
+ * times (dpBeatTrack's beatTimesSec), for auto-seeding multi-point beatgrid
+ * anchors on Regenerate (plan T7). Splits beats into fixed-size windows,
+ * averages BPM per window, and starts a new anchor only where the average
+ * shifts beyond DRIFT_THRESHOLD_PCT — small measurement jitter between
+ * windows does not fragment the grid into meaningless micro-segments.
+ *
+ * Returns null when there isn't enough data to say anything meaningful, or
+ * when no window drifts beyond the threshold — callers should leave
+ * beat_grid_points unset in that case (today's flat-BPM behavior, matching
+ * every existing track), not write a single-anchor array.
+ *
+ * @returns {{time:number, bpm:number}[] | null}
+ */
+export function detectTempoSegments(beatTimesSec, opts = {}) {
+  const windowBeats = opts.windowBeats ?? DRIFT_WINDOW_BEATS;
+  const driftThresholdPct = opts.driftThresholdPct ?? DRIFT_THRESHOLD_PCT;
+
+  if (!beatTimesSec || beatTimesSec.length < windowBeats * 2) return null;
+
+  const windows = [];
+  for (let i = 0; i + windowBeats < beatTimesSec.length; i += windowBeats) {
+    const start = beatTimesSec[i];
+    const end = beatTimesSec[i + windowBeats];
+    const avgBeatSec = (end - start) / windowBeats;
+    if (avgBeatSec <= 0) continue;
+    windows.push({ time: start, bpm: 60 / avgBeatSec });
+  }
+  if (windows.length < 2) return null;
+
+  const anchors = [windows[0]];
+  for (let i = 1; i < windows.length; i++) {
+    const last = anchors[anchors.length - 1];
+    const pctDiff = (Math.abs(windows[i].bpm - last.bpm) / last.bpm) * 100;
+    if (pctDiff >= driftThresholdPct) anchors.push(windows[i]);
+  }
+
+  if (anchors.length < 2) return null; // no meaningful drift found
+
+  return anchors.map((a) => ({ time: a.time, bpm: Math.round(a.bpm * 100) / 100 }));
+}

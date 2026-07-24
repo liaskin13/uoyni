@@ -8,7 +8,7 @@
 //   proxy: GET /tracks/:id/waveform-bin            → worker endpoint (CORS-safe, no direct R2)
 
 import { UPLOAD_WORKER_URL, UPLOAD_SECRET } from "../config";
-import { onsetEnvelope, dpBeatTrack } from "./beatDetector";
+import { onsetEnvelope, dpBeatTrack, detectTempoSegments } from "./beatDetector";
 
 // Sentinel value stored in D1 waveform_data when a track has V2 binary assets in R2.
 // Use this constant everywhere — never compare against the string literal 'v2'.
@@ -467,6 +467,10 @@ export async function generateAndUploadWaveformV2(trackId, audioUrl, onProgress)
 
   const envelope = onsetEnvelope(bars);
   const detected = dpBeatTrack(envelope, { frameRate: BEAT_DETECTOR_FRAME_RATE });
+  // null when tempo is stable (the overwhelming majority of tracks) — callers
+  // must leave beat_grid_points unset in that case, not write a spurious
+  // single-anchor grid (see detectTempoSegments' header for why).
+  const tempoSegments = detectTempoSegments(detected.beatTimesSec);
 
   if (onProgress) onProgress(60);
 
@@ -487,5 +491,6 @@ export async function generateAndUploadWaveformV2(trackId, audioUrl, onProgress)
     detectedBpm: detected.bpm,
     detectedBeatOffset: detected.beatOffsetSec,
     detectedBpmConfidence: detected.confidence,
+    tempoSegments,
   };
 }

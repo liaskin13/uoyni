@@ -270,13 +270,13 @@ export default {
         }
         const id = url.pathname.split("/")[2];
         const body = await request.json();
-        const allowed = ["title", "artist", "bpm", "bpm_display", "musical_key", "vault", "detected_bpm", "detected_beat_offset", "detected_bpm_confidence"];
+        const allowed = ["title", "artist", "bpm", "bpm_display", "musical_key", "vault", "detected_bpm", "detected_beat_offset", "detected_bpm_confidence", "beat_grid_points"];
         const fields = Object.keys(body).filter(k => allowed.includes(k));
         if (fields.length === 0) {
           return new Response(JSON.stringify({ error: "No valid fields" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
         const setClauses = fields.map(f => `${f} = ?`).join(", ");
-        const values = fields.map(f => body[f]);
+        const values = fields.map(f => f === "beat_grid_points" && body[f] != null ? JSON.stringify(body[f]) : body[f]);
         const { success } = await env.PSC_DB.prepare(`UPDATE tracks SET ${setClauses} WHERE id = ?`).bind(...values, id).run();
         return new Response(JSON.stringify({ success }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }

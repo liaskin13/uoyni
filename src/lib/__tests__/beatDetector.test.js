@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { onsetEnvelope, dpBeatTrack } from "../beatDetector";
+import { onsetEnvelope, dpBeatTrack, detectTempoSegments } from "../beatDetector";
+
+function constantBeatTimes(bpm, count, startTime = 0) {
+  const beatSec = 60 / bpm;
+  return Array.from({ length: count }, (_, i) => startTime + i * beatSec);
+}
 
 const FRAME_RATE = 50;
 
@@ -139,5 +144,66 @@ describe("dpBeatTrack — octave-error awareness (documented limitation)", () =>
     const ratio = result.bpm / 60;
     const isPlausibleOctave = [0.5, 1, 2].some((m) => Math.abs(ratio - m) < 0.1);
     expect(isPlausibleOctave).toBe(true);
+  });
+});
+
+describe("detectTempoSegments", () => {
+  it("returns null for insufficient data (not enough beats to say anything about drift)", () => {
+    expect(detectTempoSegments(null)).toBeNull();
+    expect(detectTempoSegments([])).toBeNull();
+    expect(detectTempoSegments(constantBeatTimes(120, 10))).toBeNull();
+  });
+
+  it("returns null for a track with constant tempo — MUST NOT write a spurious single-anchor grid", () => {
+    // 200 beats at a rock-steady 128 BPM.
+    const beats = constantBeatTimes(128, 200);
+    expect(detectTempoSegments(beats)).toBeNull();
+  });
+
+  it("tolerates small measurement jitter without fragmenting the grid", () => {
+    const beatSec = 60 / 128;
+    const beats = constantBeatTimes(128, 200).map(
+      (t, i) => t + (i % 2 === 0 ? beatSec * 0.02 : -beatSec * 0.02), // ~2% jitter, well under the 4% threshold
+    );
+    expect(detectTempoSegments(beats)).toBeNull();
+  });
+
+  it("detects a genuine tempo change and places an anchor at the transition", () => {
+    const firstHalf = constantBeatTimes(120, 100, 0);
+    const secondHalfStart = firstHalf[firstHalf.length - 1] + 60 / 120;
+    const secondHalf = constantBeatTimes(140, 100, secondHalfStart);
+    const beats = [...firstHalf, ...secondHalf];
+
+    const anchors = detectTempoSegments(beats);
+    expect(anchors).not.toBeNull();
+    expect(anchors.length).toBeGreaterThanOrEqual(2);
+    expect(anchors[0].bpm).toBeCloseTo(120, 0);
+    expect(anchors[anchors.length - 1].bpm).toBeCloseTo(140, 0);
+    // The transition anchor should land near where the tempo actually changed.
+    const transitionAnchor = anchors.find((a) => a.time > 0);
+    expect(transitionAnchor.time).toBeGreaterThan(30);
+    expect(transitionAnchor.time).toBeLessThan(60);
+  });
+
+  it("detects multiple tempo changes across a track", () => {
+    const seg1 = constantBeatTimes(100, 80, 0);
+    const seg2 = constantBeatTimes(120, 80, seg1[seg1.length - 1] + 60 / 100);
+    const seg3 = constantBeatTimes(90, 80, seg2[seg2.length - 1] + 60 / 120);
+    const beats = [...seg1, ...seg2, ...seg3];
+
+    const anchors = detectTempoSegments(beats);
+    expect(anchors).not.toBeNull();
+    expect(anchors.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("every returned anchor has finite time and bpm (never NaN/Infinity)", () => {
+    const seg1 = constantBeatTimes(100, 80, 0);
+    const seg2 = constantBeatTimes(150, 80, seg1[seg1.length - 1] + 60 / 100);
+    const anchors = detectTempoSegments([...seg1, ...seg2]);
+    for (const a of anchors) {
+      expect(Number.isFinite(a.time)).toBe(true);
+      expect(Number.isFinite(a.bpm)).toBe(true);
+      expect(a.bpm).toBeGreaterThan(0);
+    }
   });
 });

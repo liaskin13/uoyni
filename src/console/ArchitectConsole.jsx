@@ -189,6 +189,45 @@ export function resolveTrackBpm(track) {
   return null;
 }
 
+// Parses track.beat_grid_points defensively — it's stored as a JSON TEXT
+// column (matches cue_labels' pattern) but may already be a parsed array
+// depending on caller. Returns [] for null/invalid/malformed input.
+export function parseBeatGridPoints(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+// Extracted for unit testing — position-aware BPM lookup for the multi-point
+// beatgrid (Part 3). REGRESSION-CRITICAL: with no grid points, this must
+// produce output identical to resolveTrackBpm() for every existing track —
+// every track today has no grid points, so this is the plan's
+// highest-risk-of-silent-breakage path.
+export function resolveBpmAtTime(track, timeSec) {
+  const points = parseBeatGridPoints(track?.beat_grid_points)
+    .filter((p) => p && Number.isFinite(p.time) && Number.isFinite(p.bpm) && p.bpm > 0)
+    .sort((a, b) => a.time - b.time);
+
+  if (points.length === 0) return resolveTrackBpm(track);
+
+  // Before the first anchor: extend it backward — no "no tempo" region,
+  // matches rekordbox/Serato's own multi-marker beatgrid convention.
+  if (timeSec < points[0].time) return points[0].bpm;
+
+  // Last anchor with time <= timeSec.
+  let bpm = points[0].bpm;
+  for (const p of points) {
+    if (p.time <= timeSec) bpm = p.bpm;
+    else break;
+  }
+  return bpm;
+}
+
 // Extracted for unit testing — snaps timeSec to the nearest beat boundary.
 // bpmAt is a resolver function, not a raw number, so position-aware lookups
 // (multi-point beatgrid, Part 3) can slot in later without touching call sites.
@@ -1208,6 +1247,7 @@ function ArchitectConsole({
         detectedBpm,
         detectedBeatOffset,
         detectedBpmConfidence,
+        tempoSegments,
       } = await generateAndUploadWaveformV2(track.id, url, (pct) => {
         setWaveformProgress((prev) => ({ ...prev, [track.id]: pct }));
         if (shouldAnnounce && pct % 25 === 0 && pct > 0) {
@@ -1254,6 +1294,12 @@ function ArchitectConsole({
         }
       } catch (_) {
         /* non-critical */
+      }
+      // Auto-seed multi-point beatgrid anchors when the detector found real
+      // tempo drift (plan T7) — null means stable tempo, leave beat_grid_points
+      // unset entirely rather than writing a spurious single-anchor grid.
+      if (tempoSegments) {
+        handleBeatGridPointsChange(track, tempoSegments);
       }
     } catch (err) {
       if (shouldAnnounce) announce(`Waveform failed: ${err.message}`);
@@ -1561,6 +1607,43 @@ function ArchitectConsole({
         );
       }
       announceStatus("Octave correction failed — check console for details.", "error");
+    }
+  };
+
+  // Persists beatgrid anchor changes (drag/insert/keyboard-nudge, all fired
+  // from DeckWaveformV2's onBeatGridPointsChange). Optimistic update with
+  // rollback on PATCH failure — same pattern as handleOctaveCorrect and
+  // handleEditSave. Per the interaction-state spec, the persisted position
+  // itself is the success confirmation (no toast); rollback + a brief error
+  // flash is the only visible feedback on failure.
+  const handleBeatGridPointsChange = async (track, newPoints) => {
+    const originalTrack = trackListData.find((t) => t.id === track.id);
+    setTrackListData((prev) =>
+      prev.map((t) =>
+        t.id === track.id ? { ...t, beat_grid_points: newPoints } : t,
+      ),
+    );
+
+    try {
+      const res = await fetch(`${UPLOAD_WORKER_URL}/tracks/${track.id}`, {
+        method: "PATCH",
+        headers: {
+          "PSC-Secret": UPLOAD_SECRET,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ beat_grid_points: newPoints }),
+      });
+      if (!res.ok) throw new Error(`[PSC] beatgrid PATCH ${res.status}`);
+      const result = await res.json().catch(() => ({}));
+      if (!result.success) throw new Error("[PSC] beatgrid save: D1 returned success=false");
+    } catch (err) {
+      console.error("[PSC] beatgrid save failed:", err);
+      if (originalTrack) {
+        setTrackListData((prev) =>
+          prev.map((t) => (t.id === track.id ? originalTrack : t)),
+        );
+      }
+      announceStatus("Beatgrid save failed — check console for details.", "error");
     }
   };
 
@@ -2450,6 +2533,9 @@ function ArchitectConsole({
                   getTime={loadedTrack?.id === deckTrack?.id ? () => audioEngine.getState().currentTime : null}
                   getIsPlaying={loadedTrack?.id === deckTrack?.id ? () => audioEngine.getState().isPlaying : null}
                   getAudioLatency={loadedTrack?.id === deckTrack?.id ? () => { const ctx = audioEngine.getAudioContext(); return ctx ? (ctx.outputLatency || 0) + (ctx.baseLatency || 0) : 0; } : null}
+                  beatGridPoints={parseBeatGridPoints(deckTrack.beat_grid_points)}
+                  onBeatGridPointsChange={(pts) => handleBeatGridPointsChange(deckTrack, pts)}
+                  identityColor={isD ? "#14dc14" : "#00e5ff"}
                 />
               )}
             </div>
