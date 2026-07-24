@@ -4,6 +4,13 @@
 // Drop-in replacement for DeckWaveform.jsx — identical props interface.
 
 import { useEffect, useMemo, useRef } from "react";
+import {
+  buildGridSegments,
+  segmentAt,
+  snapToGridBeat,
+  clampAnchorTime,
+  hitTestAnchor,
+} from "../lib/beatGrid";
 
 const BARS_PER_SEC = 50;
 // Manual fine-tune (bars). Dynamic latency compensation is computed per-frame
@@ -47,6 +54,9 @@ export default function DeckWaveformV2({
   getTime         = null,
   getIsPlaying    = null,
   getAudioLatency = null,
+  beatGridPoints        = [],
+  onBeatGridPointsChange = null,
+  identityColor          = "#14dc14",
 }) {
   const canvasRef      = useRef(null);
   const rafRef         = useRef(null);
@@ -76,6 +86,16 @@ export default function DeckWaveformV2({
   // Read once per mount — re-read localStorage by reloading the page between tests.
   const beatOffsetBarsRef  = useRef(getBeatOffsetBars());
 
+  // ─── Beatgrid anchor editor state ──────────────────────────────────────
+  const beatGridPointsRef     = useRef(beatGridPoints); // controlled — parent owns persistence
+  const identityColorRef      = useRef(identityColor);
+  const dragPreviewPointsRef  = useRef(null); // live-drag visual override; null when not dragging
+  const draggingAnchorIdxRef  = useRef(-1);
+  const selectedAnchorIdxRef  = useRef(-1); // keyboard focus, cycled via [ / ]
+  const pauseGateLabelRef     = useRef({ show: false, x: 0, y: 0 }); // transient "PAUSE TO EDIT GRID"
+  const pauseGateTimeoutRef   = useRef(null);
+  const ANCHOR_HIT_TOLERANCE_SEC = 0.35; // generous enough for a mouse click, not so wide two nearby anchors collide
+
   getTimeRef.current        = getTime;
   getIsPlayingRef.current   = getIsPlaying;
   getAudioLatencyRef.current = getAudioLatency;
@@ -86,6 +106,8 @@ export default function DeckWaveformV2({
   cueColorsRef.current = cueColors;
   loopRef.current      = loopRegion;
   bpmRef.current       = bpm;
+  beatGridPointsRef.current = beatGridPoints;
+  identityColorRef.current  = identityColor;
 
   // Convert [{bass, mid, high, peak}] → typed arrays once per track load.
   // useMemo prevents re-creating up to 360 K × 3 Float32Arrays on every render.
@@ -256,38 +278,119 @@ export default function DeckWaveformV2({
         }
       }
 
-      // ─── Beat grid ────────────────────────────────────────────────────────
+      // ─── Beat grid (multi-point aware — see src/lib/beatGrid.js) ───────────
+      // dragPreviewPointsRef overrides the controlled points array during an
+      // active anchor drag so the grid updates live without spamming the
+      // parent (persistence happens once, on drop).
       const bp = bpmRef.current;
-      if (bp && bp > 0) {
-        const secPerBeat = 60 / bp;
-        const secPer4    = secPerBeat * 4;
-        const firstBeat  = Math.floor(startTimeSec / secPerBeat) * secPerBeat;
+      const gridPoints = dragPreviewPointsRef.current || beatGridPointsRef.current;
+      const segments = buildGridSegments(gridPoints, bp);
+      const timeToX = (t) => ((t * BARS_PER_SEC - startBar) / (endBar - startBar)) * w;
 
-        for (let t = firstBeat; t <= endTimeSec + secPerBeat; t += secPerBeat) {
-          const beatIdx  = Math.round(t / secPerBeat);
-          const isBar    = beatIdx % 4  === 0;
-          const isPhrase = beatIdx % 16 === 0;
-          const xPos     = ((t * BARS_PER_SEC - startBar) / (endBar - startBar)) * w;
-          if (xPos < 0 || xPos > w) continue;
-          ctx.strokeStyle = isPhrase ? "rgba(255,255,255,0.22)"
-                          : isBar   ? "rgba(255,255,255,0.10)"
-                                    : "rgba(255,255,255,0.04)";
-          ctx.lineWidth   = isPhrase ? 1 : 0.5;
-          ctx.beginPath(); ctx.moveTo(xPos, 0); ctx.lineTo(xPos, h * 0.88); ctx.stroke();
+      if (segments.length > 0) {
+        ctx.font      = "7px 'JetBrains Mono', monospace";
+        ctx.fillStyle = "rgba(255,255,255,0.32)";
+        ctx.textAlign = "center";
+
+        for (let si = 0; si < segments.length; si++) {
+          const seg = segments[si];
+          const segStartTime = si === 0 ? -Infinity : seg.time; // first segment extends backward
+          const segEndTime   = si < segments.length - 1 ? segments[si + 1].time : Infinity;
+          const drawStart = Math.max(segStartTime, startTimeSec);
+          const drawEnd   = Math.min(segEndTime, endTimeSec);
+          if (drawStart > drawEnd) continue;
+
+          const secPerBeat = 60 / seg.bpm;
+          const secPer4    = secPerBeat * 4;
+          const firstBeatT = seg.time + Math.floor((drawStart - seg.time) / secPerBeat) * secPerBeat;
+
+          for (let t = firstBeatT; t <= drawEnd + secPerBeat; t += secPerBeat) {
+            const beatIdx  = seg.beatsAtStart + Math.round((t - seg.time) / secPerBeat);
+            const isBar    = beatIdx % 4  === 0;
+            const isPhrase = beatIdx % 16 === 0;
+            const xPos     = timeToX(t);
+            if (xPos < 0 || xPos > w) continue;
+            ctx.strokeStyle = isPhrase ? "rgba(255,255,255,0.22)"
+                            : isBar   ? "rgba(255,255,255,0.10)"
+                                      : "rgba(255,255,255,0.04)";
+            ctx.lineWidth   = isPhrase ? 1 : 0.5;
+            ctx.beginPath(); ctx.moveTo(xPos, 0); ctx.lineTo(xPos, h * 0.88); ctx.stroke();
+          }
+
+          // Bar number labels — only when bars are wide enough to read
+          const pxPerBar = ((secPer4 * BARS_PER_SEC) / (endBar - startBar)) * w;
+          if (pxPerBar >= 20) {
+            const firstBar4T = seg.time + Math.ceil((drawStart - seg.time) / secPer4) * secPer4;
+            for (let t = firstBar4T; t <= drawEnd + secPer4; t += secPer4) {
+              const xPos = timeToX(t);
+              if (xPos < 6 || xPos > w - 6) continue;
+              const beatIdx = seg.beatsAtStart + Math.round((t - seg.time) / secPerBeat);
+              ctx.fillText(String(Math.round(beatIdx / 4) + 1), xPos, 9);
+            }
+          }
+        }
+        ctx.textAlign = "left";
+
+        // ─── Anchor markers + inter-anchor segment lines (only when real
+        // multi-point data exists — a synthetic single flat-BPM segment
+        // draws no markers, keeping the no-grid-points path byte-identical
+        // to pre-multi-point-grid rendering) ─────────────────────────────
+        if (gridPoints && gridPoints.length > 0) {
+          const sortedPoints = [...gridPoints].sort((a, b) => a.time - b.time);
+          const isPlayingNow = getIsPlayingRef.current?.() ?? false;
+          const idleColor    = "rgba(240,237,232,0.55)";
+          const dimOpacity   = 0.4;
+
+          // Connecting line between consecutive anchors, at a fixed y near the top.
+          ctx.strokeStyle = idleColor;
+          ctx.lineWidth   = 1;
+          ctx.globalAlpha = isPlayingNow ? dimOpacity : 1;
+          for (let i = 0; i < sortedPoints.length - 1; i++) {
+            const x1 = timeToX(sortedPoints[i].time);
+            const x2 = timeToX(sortedPoints[i + 1].time);
+            if (x2 < 0 || x1 > w) continue;
+            ctx.beginPath();
+            ctx.moveTo(Math.max(0, x1), 4);
+            ctx.lineTo(Math.min(w, x2), 4);
+            ctx.stroke();
+          }
+
+          sortedPoints.forEach((p, i) => {
+            const x = timeToX(p.time);
+            if (x < -6 || x > w + 6) return;
+            const isDragging = i === draggingAnchorIdxRef.current;
+            const isFocused  = !isDragging && i === selectedAnchorIdxRef.current;
+            const y = 4;
+            const r = 4; // 6x6px diamond = ~4px half-diagonal
+
+            ctx.save();
+            ctx.globalAlpha = isPlayingNow && !isDragging ? dimOpacity : 1;
+            ctx.translate(x, y);
+            ctx.rotate(Math.PI / 4);
+            if (isDragging) {
+              ctx.shadowColor = identityColorRef.current;
+              ctx.shadowBlur  = 6;
+              ctx.fillStyle   = identityColorRef.current;
+              ctx.fillRect(-r / 2, -r / 2, r, r);
+            } else if (isFocused) {
+              ctx.strokeStyle = identityColorRef.current;
+              ctx.lineWidth   = 1;
+              ctx.strokeRect(-r / 2, -r / 2, r, r);
+            } else {
+              ctx.fillStyle = idleColor;
+              ctx.fillRect(-r / 2, -r / 2, r, r);
+            }
+            ctx.restore();
+          });
+          ctx.globalAlpha = 1;
         }
 
-        // Bar number labels — only when bars are wide enough to read
-        const pxPerBar = ((secPer4 * BARS_PER_SEC) / (endBar - startBar)) * w;
-        if (pxPerBar >= 20) {
-          ctx.font      = "7px 'JetBrains Mono', monospace";
-          ctx.fillStyle = "rgba(255,255,255,0.32)";
+        // ─── Transient "PAUSE TO EDIT GRID" cue ──────────────────────────
+        if (pauseGateLabelRef.current.show) {
+          ctx.font = "7px 'JetBrains Mono', monospace";
           ctx.textAlign = "center";
-          const firstBar4 = Math.ceil(startTimeSec / secPer4) * secPer4;
-          for (let t = firstBar4; t <= endTimeSec + secPer4; t += secPer4) {
-            const xPos = ((t * BARS_PER_SEC - startBar) / (endBar - startBar)) * w;
-            if (xPos < 6 || xPos > w - 6) continue;
-            ctx.fillText(String(Math.round(t / secPer4) + 1), xPos, 9);
-          }
+          ctx.fillStyle = "rgba(160,160,160,0.85)";
+          ctx.fillText("PAUSE TO EDIT GRID", pauseGateLabelRef.current.x, Math.max(12, pauseGateLabelRef.current.y));
           ctx.textAlign = "left";
         }
       }
@@ -386,7 +489,59 @@ export default function DeckWaveformV2({
     return () => canvas.removeEventListener("wheel", onWheel);
   }, []);
 
+  // Mirrors the viewport math used inside the draw loop / handleClick —
+  // converts a screen X back to a track-time value.
+  const xToTime = (clientX) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return ctRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const frac = (clientX - rect.left) / rect.width;
+    const barCount = bandsRef.current?.barCount ?? waveformData?.length ?? 1000;
+    const visibleBars = barCount / (displayZoomRef.current || zoomRef.current || 1);
+    const dur = durRef.current;
+    const playFrac = dur > 0 ? ctRef.current / dur : 0;
+    const centerBar = playFrac * barCount;
+    const halfVisible = visibleBars / 2;
+    let startBar;
+    if (centerBar < halfVisible) startBar = 0;
+    else if (centerBar > barCount - halfVisible) startBar = barCount - visibleBars;
+    else startBar = centerBar - halfVisible;
+    const clickedBar = startBar + frac * visibleBars;
+    return Math.max(0, Math.min((clickedBar / barCount) * dur, dur));
+  };
+
+  const showPauseGateLabel = (xPx) => {
+    pauseGateLabelRef.current = { show: true, x: xPx, y: 14 };
+    if (pauseGateTimeoutRef.current) clearTimeout(pauseGateTimeoutRef.current);
+    pauseGateTimeoutRef.current = setTimeout(() => {
+      pauseGateLabelRef.current = { ...pauseGateLabelRef.current, show: false };
+    }, 1200);
+  };
+
+  const justFinishedAnchorDragRef = useRef(false);
+
   const handleMouseDown = (e) => {
+    const points = beatGridPointsRef.current;
+    if (points && points.length > 0) {
+      const time = xToTime(e.clientX);
+      const sorted = [...points].sort((a, b) => a.time - b.time);
+      const hitIdx = hitTestAnchor(sorted, time, ANCHOR_HIT_TOLERANCE_SEC);
+      if (hitIdx !== -1) {
+        const isPlayingNow = getIsPlayingRef.current?.() ?? false;
+        if (isPlayingNow) {
+          const canvas = canvasRef.current;
+          const rect = canvas?.getBoundingClientRect();
+          showPauseGateLabel(rect ? e.clientX - rect.left : 0);
+          e.preventDefault();
+          return; // blocked — don't fall through to seek-drag either
+        }
+        draggingAnchorIdxRef.current = hitIdx;
+        selectedAnchorIdxRef.current = hitIdx;
+        dragPreviewPointsRef.current = sorted;
+        e.preventDefault();
+        return;
+      }
+    }
     isDraggingRef.current  = true;
     lastDragXRef.current   = e.clientX;
     seekedTimeRef.current  = ctRef.current;
@@ -394,6 +549,17 @@ export default function DeckWaveformV2({
   };
 
   const handleMouseMove = (e) => {
+    if (draggingAnchorIdxRef.current !== -1) {
+      const idx = draggingAnchorIdxRef.current;
+      const points = dragPreviewPointsRef.current;
+      if (!points) return;
+      const time = xToTime(e.clientX);
+      const clamped = clampAnchorTime(points, idx, time, durRef.current);
+      dragPreviewPointsRef.current = points.map((p, i) =>
+        i === idx ? { ...p, time: clamped } : p,
+      );
+      return;
+    }
     if (!isDraggingRef.current || !onSeek) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -410,9 +576,23 @@ export default function DeckWaveformV2({
     onSeek(next);
   };
 
-  const handleMouseUp = () => { isDraggingRef.current = false; };
+  const handleMouseUp = () => {
+    if (draggingAnchorIdxRef.current !== -1) {
+      const finalPoints = dragPreviewPointsRef.current;
+      draggingAnchorIdxRef.current = -1;
+      dragPreviewPointsRef.current = null;
+      justFinishedAnchorDragRef.current = true;
+      if (onBeatGridPointsChange && finalPoints) onBeatGridPointsChange(finalPoints);
+      return;
+    }
+    isDraggingRef.current = false;
+  };
 
   const handleClick = (e) => {
+    if (justFinishedAnchorDragRef.current) {
+      justFinishedAnchorDragRef.current = false;
+      return; // don't seek right after dropping an anchor
+    }
     // Ignore if the user was dragging (moved more than 4px)
     if (Math.abs(e.clientX - lastDragXRef.current) > 4) return;
     if (!onSeek) return;
@@ -431,6 +611,83 @@ export default function DeckWaveformV2({
     onSeek(Math.max(0, Math.min((clickedBar / barCount) * duration, duration)));
   };
 
+  // Double-click empty grid space inserts a new anchor, snapped to the
+  // nearest beat boundary of the surrounding segment (see snapToGridBeat —
+  // this reuses the existing beat-grid math rather than requiring a
+  // separately-persisted onset-transient array). Double-click on an
+  // existing anchor is a no-op (not a delete gesture — out of scope).
+  const handleDoubleClick = (e) => {
+    if (!onBeatGridPointsChange) return;
+    const isPlayingNow = getIsPlayingRef.current?.() ?? false;
+    const canvas = canvasRef.current;
+    const rect = canvas?.getBoundingClientRect();
+    if (isPlayingNow) {
+      showPauseGateLabel(rect ? e.clientX - rect.left : 0);
+      return;
+    }
+    const time = xToTime(e.clientX);
+    const points = beatGridPointsRef.current || [];
+    const sorted = [...points].sort((a, b) => a.time - b.time);
+    if (hitTestAnchor(sorted, time, ANCHOR_HIT_TOLERANCE_SEC) !== -1) return;
+
+    const segments = buildGridSegments(sorted, bpmRef.current);
+    if (segments.length === 0) return; // no BPM info to seed a new anchor from
+    const snapped = snapToGridBeat(segments, time);
+    const seg = segmentAt(segments, snapped);
+    const updated = [...sorted, { time: snapped, bpm: seg.bpm }].sort(
+      (a, b) => a.time - b.time,
+    );
+    onBeatGridPointsChange(updated);
+  };
+
+  // Keyboard alternative to dragging (design review Issue 5): [ / ] cycles
+  // focus between anchors (not Tab — hijacking native Tab focus order is a
+  // worse a11y regression than the feature it'd add), arrow keys nudge the
+  // focused anchor by one beat (Shift+arrow: one bar). stopPropagation on
+  // the nudge keys is required — the console's global keyboard shortcuts
+  // also bind ArrowLeft/ArrowRight to seeking.
+  const handleKeyDown = (e) => {
+    const points = beatGridPointsRef.current;
+    if (!points || points.length === 0) return;
+    const sorted = [...points].sort((a, b) => a.time - b.time);
+
+    if (e.key === "[" || e.key === "]") {
+      e.preventDefault();
+      e.stopPropagation();
+      const cur = selectedAnchorIdxRef.current;
+      selectedAnchorIdxRef.current =
+        cur === -1
+          ? (e.key === "]" ? 0 : sorted.length - 1)
+          : e.key === "]"
+            ? (cur + 1) % sorted.length
+            : (cur - 1 + sorted.length) % sorted.length;
+      return;
+    }
+
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    const idx = selectedAnchorIdxRef.current;
+    if (idx === -1 || idx >= sorted.length) return;
+
+    const isPlayingNow = getIsPlayingRef.current?.() ?? false;
+    if (isPlayingNow) {
+      e.preventDefault();
+      e.stopPropagation();
+      const canvas = canvasRef.current;
+      showPauseGateLabel(canvas ? canvas.getBoundingClientRect().width / 2 : 0);
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+    const anchor = sorted[idx];
+    const seg = segmentAt(buildGridSegments(sorted, bpmRef.current), anchor.time);
+    const beatSeconds = seg ? 60 / seg.bpm : 0.5;
+    const nudge = (e.shiftKey ? beatSeconds * 4 : beatSeconds) * (e.key === "ArrowRight" ? 1 : -1);
+    const clamped = clampAnchorTime(sorted, idx, anchor.time + nudge, durRef.current);
+    const updated = sorted.map((p, i) => (i === idx ? { ...p, time: clamped } : p));
+    if (onBeatGridPointsChange) onBeatGridPointsChange(updated);
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", width: "100%", position: "relative" }}>
       {isGenerating && (
@@ -447,10 +704,14 @@ export default function DeckWaveformV2({
       <canvas
         ref={canvasRef}
         onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onKeyDown={handleKeyDown}
+        tabIndex={onBeatGridPointsChange ? 0 : undefined}
+        aria-label="Waveform with editable beatgrid"
         style={{ width: "100%", height: "100%", cursor: onSeek ? "ew-resize" : "default", display: "block", flex: 1, userSelect: "none" }}
       />
     </div>
