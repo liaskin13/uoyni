@@ -49,3 +49,22 @@ test("Quantize state is session-only — resets on reload (not persisted, by des
     .getByRole("button");
   await expect(toggleAfterReload).toHaveText("OFF");
 });
+
+// L's panel is a DIFFERENT component (the imported <AdminSettings>, "adm-row"/
+// "adm-toggle" markup) than D's inline panel ("arch-settings-row"/
+// "arch-settings-toggle") — ship's coverage audit found every prior E2E spec
+// defaulted to owner="D", leaving this path completely unverified despite
+// wiring quantizeEnabled through a second, structurally different component.
+test("L's settings panel (different component than D's) also has a working Quantize toggle", async ({ page }) => {
+  await loginToConsole(page, "L");
+  await page.getByRole("button", { name: "Open architect rail" }).click();
+  await page.getByRole("button", { name: /system settings/i }).click();
+
+  const toggle = page
+    .locator(".adm-row", { hasText: "Quantize" })
+    .getByRole("button");
+  await expect(toggle).toHaveText("OFF");
+
+  await toggle.click();
+  await expect(toggle).toHaveText("ON");
+});
