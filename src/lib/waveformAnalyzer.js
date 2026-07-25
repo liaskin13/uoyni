@@ -469,8 +469,10 @@ export async function generateAndUploadWaveformV2(trackId, audioUrl, onProgress)
   const detected = dpBeatTrack(envelope, { frameRate: BEAT_DETECTOR_FRAME_RATE });
   // null when tempo is stable (the overwhelming majority of tracks) — callers
   // must leave beat_grid_points unset in that case, not write a spurious
-  // single-anchor grid (see detectTempoSegments' header for why).
-  const tempoSegments = detectTempoSegments(detected.beatTimesSec);
+  // single-anchor grid (see detectTempoSegments' header for why). Fed the raw
+  // envelope, NOT detected.beatTimesSec — the DP tracker's beat sequence is
+  // smoothed toward a single tempo by design and can't represent real drift.
+  const tempoSegments = detectTempoSegments(envelope, BEAT_DETECTOR_FRAME_RATE);
 
   if (onProgress) onProgress(60);
 

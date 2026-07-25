@@ -181,37 +181,56 @@ export function dpBeatTrack(envelope, opts = {}) {
   };
 }
 
-const DRIFT_WINDOW_BEATS = 16; // ~4 bars — enough beats per window for a stable average
+const DRIFT_WINDOW_SEC = 8; // fixed-duration window — enough cycles for a stable local autocorrelation across the full 60-200 BPM range, short enough to localize a real tempo change
 const DRIFT_THRESHOLD_PCT = 4; // matches typical live-mix tempo-drift tolerance before it's audible
 
 /**
- * Detects genuine tempo drift across a track from the DP tracker's own beat
- * times (dpBeatTrack's beatTimesSec), for auto-seeding multi-point beatgrid
- * anchors on Regenerate (plan T7). Splits beats into fixed-size windows,
- * averages BPM per window, and starts a new anchor only where the average
- * shifts beyond DRIFT_THRESHOLD_PCT — small measurement jitter between
- * windows does not fragment the grid into meaningless micro-segments.
+ * Detects genuine tempo drift across a track by estimating tempo
+ * INDEPENDENTLY in each fixed-duration window, straight from the onset
+ * envelope — deliberately NOT from dpBeatTrack's beatTimesSec.
+ *
+ * Why: dpBeatTrack's DP recurrence carries a heavy transition-cost penalty
+ * (alpha=400) against any beat spacing that deviates from its single
+ * estimated tempo period. That's correct for its job (finding the best
+ * global beat grid), but it means the beat sequence it outputs is, by
+ * construction, forced toward near-constant spacing — real tempo variation
+ * gets smoothed away before drift-detection ever sees it. This was caught
+ * live (2026-07-25) on an 11-minute original composition with genuine
+ * human tempo variation: the DP tracker converged on a low-confidence
+ * (0.29) "steady ~100 BPM" that didn't match what's actually audible, and
+ * because ITS OWN beat times were internally self-consistent, the old
+ * windowed-beat-times version of this function never saw the drift either.
+ *
+ * Each window here re-runs the same autocorrelation estimator dpBeatTrack
+ * uses (estimateTempoPeriod), but scoped to just that window's slice of the
+ * envelope — independent per window, so real variation isn't averaged out
+ * by a global continuity assumption. Near-silent windows (intro/outro, gaps
+ * between phrases) are skipped rather than seeding a bogus tempo from noise.
  *
  * Returns null when there isn't enough data to say anything meaningful, or
  * when no window drifts beyond the threshold — callers should leave
  * beat_grid_points unset in that case (today's flat-BPM behavior, matching
  * every existing track), not write a single-anchor array.
  *
+ * @param {number[]} envelope onset strength per frame (from onsetEnvelope) — the SAME envelope passed to dpBeatTrack, not its output
+ * @param {number} frameRate must match the bars' bars/sec (default 50)
  * @returns {{time:number, bpm:number}[] | null}
  */
-export function detectTempoSegments(beatTimesSec, opts = {}) {
-  const windowBeats = opts.windowBeats ?? DRIFT_WINDOW_BEATS;
+export function detectTempoSegments(envelope, frameRate = 50, opts = {}) {
+  const windowSec = opts.windowSec ?? DRIFT_WINDOW_SEC;
   const driftThresholdPct = opts.driftThresholdPct ?? DRIFT_THRESHOLD_PCT;
+  const windowFrames = Math.round(windowSec * frameRate);
 
-  if (!beatTimesSec || beatTimesSec.length < windowBeats * 2) return null;
+  if (!envelope || envelope.length < windowFrames * 2) return null;
 
   const windows = [];
-  for (let i = 0; i + windowBeats < beatTimesSec.length; i += windowBeats) {
-    const start = beatTimesSec[i];
-    const end = beatTimesSec[i + windowBeats];
-    const avgBeatSec = (end - start) / windowBeats;
-    if (avgBeatSec <= 0) continue;
-    windows.push({ time: start, bpm: 60 / avgBeatSec });
+  for (let start = 0; start + windowFrames <= envelope.length; start += windowFrames) {
+    const slice = envelope.slice(start, start + windowFrames);
+    const peak = Math.max(...slice);
+    if (!Number.isFinite(peak) || peak < FLAT_ENVELOPE_FLOOR) continue; // near-silence — skip, don't inject a bogus tempo
+    const tempo = estimateTempoPeriod(slice, frameRate);
+    if (!tempo) continue;
+    windows.push({ time: start / frameRate, bpm: tempo.bpm });
   }
   if (windows.length < 2) return null;
 
