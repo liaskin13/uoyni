@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { onsetEnvelope, dpBeatTrack, detectTempoSegments } from "../beatDetector";
 
+function constantBeatTimes(bpm, count, startTime = 0) {
+  const beatSec = 60 / bpm;
+  return Array.from({ length: count }, (_, i) => startTime + i * beatSec);
+}
+
 const FRAME_RATE = 50;
 
 // Builds a synthetic bars array (what analyzeAudio() would return) with a
@@ -142,82 +147,59 @@ describe("dpBeatTrack — octave-error awareness (documented limitation)", () =>
   });
 });
 
-// Builds an onset envelope for a track whose tempo changes at segment
-// boundaries — concatenates independent syntheticClickBars() runs so each
-// segment's periodicity is genuinely local, the same shape dpBeatTrack's
-// globally-smoothed beatTimesSec could NOT represent (that's the bug this
-// rewrite fixes: drift detection must run on the raw envelope, not on a
-// beat sequence that's already been forced toward a single tempo).
-function multiTempoEnvelope(segments) {
-  const bars = segments.flatMap(({ bpm, durationSec }) => syntheticClickBars(bpm, durationSec));
-  return onsetEnvelope(bars);
-}
-
 describe("detectTempoSegments", () => {
-  it("returns null for insufficient data (not enough windows to say anything about drift)", () => {
-    expect(detectTempoSegments(null, FRAME_RATE)).toBeNull();
-    expect(detectTempoSegments([], FRAME_RATE)).toBeNull();
-    const shortEnv = multiTempoEnvelope([{ bpm: 120, durationSec: 5 }]);
-    expect(detectTempoSegments(shortEnv, FRAME_RATE)).toBeNull();
+  it("returns null for insufficient data (not enough beats to say anything about drift)", () => {
+    expect(detectTempoSegments(null)).toBeNull();
+    expect(detectTempoSegments([])).toBeNull();
+    expect(detectTempoSegments(constantBeatTimes(120, 10))).toBeNull();
   });
 
   it("returns null for a track with constant tempo — MUST NOT write a spurious single-anchor grid", () => {
-    const env = multiTempoEnvelope([{ bpm: 128, durationSec: 60 }]);
-    expect(detectTempoSegments(env, FRAME_RATE)).toBeNull();
+    // 200 beats at a rock-steady 128 BPM.
+    const beats = constantBeatTimes(128, 200);
+    expect(detectTempoSegments(beats)).toBeNull();
   });
 
-  it("skips near-silent windows instead of seeding a bogus tempo from noise", () => {
-    const clickBars = syntheticClickBars(120, 20);
-    const silentBars = new Array(20 * FRAME_RATE).fill({ bass: 0, mid: 0, high: 0, peak: 0 });
-    const env = onsetEnvelope([...clickBars, ...silentBars, ...clickBars]);
-    // Should not throw, and any anchors returned must still be finite/sane —
-    // the silent middle window must not corrupt the result.
-    const anchors = detectTempoSegments(env, FRAME_RATE);
-    if (anchors) {
-      for (const a of anchors) {
-        expect(Number.isFinite(a.bpm)).toBe(true);
-        expect(a.bpm).toBeGreaterThan(0);
-      }
-    }
+  it("tolerates small measurement jitter without fragmenting the grid", () => {
+    const beatSec = 60 / 128;
+    const beats = constantBeatTimes(128, 200).map(
+      (t, i) => t + (i % 2 === 0 ? beatSec * 0.02 : -beatSec * 0.02), // ~2% jitter, well under the 4% threshold
+    );
+    expect(detectTempoSegments(beats)).toBeNull();
   });
 
   it("detects a genuine tempo change and places an anchor at the transition", () => {
-    const env = multiTempoEnvelope([
-      { bpm: 120, durationSec: 40 },
-      { bpm: 140, durationSec: 40 },
-    ]);
-    const anchors = detectTempoSegments(env, FRAME_RATE);
+    const firstHalf = constantBeatTimes(120, 100, 0);
+    const secondHalfStart = firstHalf[firstHalf.length - 1] + 60 / 120;
+    const secondHalf = constantBeatTimes(140, 100, secondHalfStart);
+    const beats = [...firstHalf, ...secondHalf];
+
+    const anchors = detectTempoSegments(beats);
     expect(anchors).not.toBeNull();
     expect(anchors.length).toBeGreaterThanOrEqual(2);
-    // syntheticClickBars quantizes each period to whole frames, so the true
-    // periodicity in the data isn't the literal 120/140 — same caveat the
-    // dpBeatTrack tests above document. 120 quantizes exact; 140 -> ~142.86.
     expect(anchors[0].bpm).toBeCloseTo(120, 0);
-    expect(anchors[anchors.length - 1].bpm).toBeCloseTo(142.86, 0);
-    // The transition anchor should land near where the tempo actually changed (~40s in).
+    expect(anchors[anchors.length - 1].bpm).toBeCloseTo(140, 0);
+    // The transition anchor should land near where the tempo actually changed.
     const transitionAnchor = anchors.find((a) => a.time > 0);
-    expect(transitionAnchor.time).toBeGreaterThan(24);
-    expect(transitionAnchor.time).toBeLessThan(56);
+    expect(transitionAnchor.time).toBeGreaterThan(30);
+    expect(transitionAnchor.time).toBeLessThan(60);
   });
 
   it("detects multiple tempo changes across a track", () => {
-    const env = multiTempoEnvelope([
-      { bpm: 100, durationSec: 32 },
-      { bpm: 120, durationSec: 32 },
-      { bpm: 90, durationSec: 32 },
-    ]);
-    const anchors = detectTempoSegments(env, FRAME_RATE);
+    const seg1 = constantBeatTimes(100, 80, 0);
+    const seg2 = constantBeatTimes(120, 80, seg1[seg1.length - 1] + 60 / 100);
+    const seg3 = constantBeatTimes(90, 80, seg2[seg2.length - 1] + 60 / 120);
+    const beats = [...seg1, ...seg2, ...seg3];
+
+    const anchors = detectTempoSegments(beats);
     expect(anchors).not.toBeNull();
     expect(anchors.length).toBeGreaterThanOrEqual(3);
   });
 
   it("every returned anchor has finite time and bpm (never NaN/Infinity)", () => {
-    const env = multiTempoEnvelope([
-      { bpm: 100, durationSec: 32 },
-      { bpm: 150, durationSec: 32 },
-    ]);
-    const anchors = detectTempoSegments(env, FRAME_RATE);
-    expect(anchors).not.toBeNull();
+    const seg1 = constantBeatTimes(100, 80, 0);
+    const seg2 = constantBeatTimes(150, 80, seg1[seg1.length - 1] + 60 / 100);
+    const anchors = detectTempoSegments([...seg1, ...seg2]);
     for (const a of anchors) {
       expect(Number.isFinite(a.time)).toBe(true);
       expect(Number.isFinite(a.bpm)).toBe(true);
