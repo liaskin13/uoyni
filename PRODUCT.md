@@ -44,8 +44,6 @@ SoundCloud, Spotify, Tidal, Apple Music, Twitch — any platform that puts the a
 
 Pioneer rekordbox UI patterns (cluttered, utilitarian gray). Serato's legacy layout where track lists are afterthoughts. Any dashboard that feels like SaaS. Any aesthetic that feels like someone ran a Figma template.
 
-No space themes. No orbital imagery. No astronomical metaphors. These were tried and removed — they belong to a different project.
-
 Nothing that looks like AI made it.
 
 ## Design Principles
