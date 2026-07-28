@@ -95,7 +95,7 @@ If the answer is unclear, stop and reframe until it is.
 4. **Current state:** single console at `src/console/ArchitectConsole.jsx`. Both L and D use it; `viewer` prop controls feature differences. Branch is `main`. Cloudflare Pages deploys from main automatically.
 5. **Read `DESIGN.md`** — all design decisions live here. Do not touch any CSS, JSX, or visual element without reading this first. If what you are about to do contradicts DESIGN.md, stop and say so.
 6. Apply the artist benefit check to the first task before touching any code
-
+7. Read NEXTSESSION, read TODO and ask if context-restore should be invoked before building a plan. 
 ---
 
 ## MASTER DIRECTIVE: SYSTEM
