@@ -52,19 +52,6 @@ may differ.
 
 ---
 
-### AudioContext leak + unthrottled waveform generation on upload
-
-**Priority:** Medium
-**Blocked by:** nothing — separate failure surface from the INTAKE batch-upload fix, deferred out of that PR to keep the diff right-sized.
-
-**What:** `src/lib/waveformAnalyzer.js:222` creates `new AudioContext()` inside `analyzeAudio()` and never calls `.close()`. Separately, `ArchitectConsole.jsx`'s `psc:track-uploaded` listener (`handleUpload`, ~line 570-576) calls `ensureWaveformForTrack(newTrack, true)` directly and unthrottled, instead of going through the existing sequential `waveformQueueRef`/`runWaveformQueue` pipeline (~line 528) already used for the initial track-list load.
-
-**Why:** Dropping several files in one batch fires one `psc:track-uploaded` event per upload, each triggering its own immediate, concurrent waveform decode — each opening a fresh, never-closed `AudioContext`. This is the confirmed cause of stacked `[PSC] waveform generation failed: EncodingError: Decoding failed` console errors observed during a multi-file drop session (2026-07-21).
-
-**Fix:** (1) wrap the `decodeAudioData` call in `analyzeAudio()` in try/finally and close the context; (2) route `handleUpload`'s waveform trigger through `waveformQueueRef`/`runWaveformQueue` instead of calling `ensureWaveformForTrack` directly, so upload-time waveform generation is one-at-a-time regardless of batch size.
-
-**Context:** Discovered while diagnosing a separate multi-file upload bug (INTAKE modal only reading `dataTransfer.files[0]`) that turned out to be the real cause of "only the first file uploads." This waveform issue is real but was a red herring for that bug — uploads succeed, only the post-upload waveform decode fails.
-
 ---
 
 ### Pre-existing: vault-switch-mid-batch and orphaned R2 multipart sessions
@@ -144,4 +131,61 @@ may differ.
 
 **Why deferred:** Most of this (items 4 and 5 especially) is pre-existing repo-wide test-infra debt, not something the beat-quantize/beatgrid branch introduced — pulling it into that branch's ship would have scope-crept a feature PR into an infra PR.
 
-**Context:** Not urgent, but flagged explicitly so it doesn't get lost — pick up as its own dedicated session/PR.
+---
+
+### No way to clear a single hot cue — only clear ALL
+
+**Priority:** Medium
+**Blocked by:** nothing — needs a design pass on the cleanest UX before building (see below).
+
+**What:** D noticed the console only offers a bulk "clear all cues" action — there's no way to clear one individual hot cue without wiping every cue on the deck. Flagged directly by D, relayed by L (2026-08-11).
+
+**Why:** Real workflow gap for D — clearing one mis-placed cue currently means losing all of them and re-setting the rest from scratch.
+
+**Context:** Needs a scoping pass before implementation: cleanest UX is not yet decided (options likely include a per-cue right-click/long-press clear, a modifier-click on the cue pad itself, or a small "x" affordance next to each cue in whatever list/pad UI currently renders them — find and read that UI first). Should be looked at together with the broader idea below rather than bolted on in isolation.
+
+**Related, broader scope (not yet its own TODO — needs shaping first):** L separately asked to consider a full review of all console buttons/controls — their functionality, discoverability (hints/tooltips), and whether the COMMS status LCD (`announceStatus()`, added 2026-07-22 session, sibling to the REACH LCD) is being used to its full intended potential for surfacing this kind of state/feedback. Worth a dedicated `/design-review` or `/office-hours` pass rather than folding into a single-cue-clear fix — the single-cue-clear gap is a good concrete example to bring INTO that review, not a substitute for it.
+
+**Depends on:** Nothing technical. Needs a UX decision (with L/D) before building.
+
+---
+
+### Extend WF (DeckWaveformV2) to the same 5-band Bark color scheme as SA
+
+**Priority:** Medium
+**Blocked by:** SA's 5-band proposal finishing its `/plan-design-review` pass and shipping first (2026-08-12 plan: `vivid-finding-riddle.md`, "DECIDED — SA 5-band color scheme, Bark critical-band boundaries").
+
+**What:** L confirmed direct intent to move WF's bass/mid/high coloring to the same 5-band, Bark-critical-band-derived scheme just locked in for the SA (low/mid-low/mid/mid-high/high; red/red-orange/green/cyan/indigo — indigo is the top-end anchor, matching real ROYGBIV spectrum order, not a middle band) — explicitly wants SA correct first, WF second, not simultaneous.
+
+**Why:** DESIGN.md states SA's band scheme exists specifically to keep SA and WF "speaking the same visual dialect." Moving only SA to 5 bands leaves that stated coherence goal unmet until WF follows. Also a real design opportunity on its own — WF has never had its band math re-examined the way SA's just was.
+
+**Context:** Not a copy-paste of SA's implementation. SA colors 150 independent frequency bars; WF colors per-time-slice via a screen-blend RGB model showing which band dominates at that instant in the waveform (`DeckWaveformV2.jsx` / `src/lib/waveformAnalyzer.js`). The Bark boundary Hz values themselves carry over unchanged (534/1230/2579/5927Hz) but the color-blending logic needs its own design pass, not a mechanical port. Same colorblind-simulation check (deuteranopia/protanopia) that caught the orange-vs-green collision on SA should be re-run here before locking a final WF palette — WF's continuous per-pixel blending may behave differently than SA's discrete per-bar coloring under that simulation.
+
+**Depends on:** SA's 5-band scheme shipping and being confirmed live first (L's explicit sequencing).
+
+---
+
+### SA peak-hold ghost-trail color slightly less crisp over Mid-low band (P3 polish)
+
+**Priority:** Low (P3)
+**Blocked by:** Nothing — cosmetic, not blocking the 5-band ship.
+
+**What:** The peak-hold "ghost fill" overlay (`rgba(225,85,68,0.42)`, salmon) sits closer in hue to the new Mid-low red-orange band (`#ff5500`) than to the other 4 bands — RGB distance 74 vs. 74-338 for everything else. Still a real, visible difference, just the least crisp of the five.
+
+**Why:** Surfaced during `/plan-design-review` of the SA 5-band color proposal — the deuteranopia-safety fix that moved Mid-low from `#ff8000` to `#ff5500` incidentally pulled it closer to the pre-existing salmon overlay color (was 86 apart, now 74).
+
+**Context:** Tested yellow/gold/amber as alternative ghost-trail colors — all worse, not better: gold vs. green collides almost completely under protanopia (distance 2), amber and pure yellow both sit right at or near the colorblind-safety threshold (30) against green. Salmon remains the best-performing option checked so far — nothing found beats it. If revisited, the fix is a new ghost-trail color verified against all 5 final band colors (`#ff0000`/`#ff5500`/`#00ff00`/`#6600ff`/`#00ffff`) under both deuteranopia and protanopia simulation before adopting, not a guess.
+
+**Depends on:** Nothing technical.
+
+---
+
+## Completed
+
+### AudioContext leak + unthrottled waveform generation on upload
+
+**What:** `analyzeAudio()` never closed its `AudioContext`; `handleUpload` and `loadAndPlay` both bypassed the sequential waveform-generation queue, opening one concurrent decode per file on a multi-file drop.
+
+**Fix:** `analyzeAudio()`'s `decodeAudioData` wrapped in try/finally with `.close()` in both paths; `handleUpload` now routes through `waveformQueueRef`/`runWaveformQueue` via a new `enqueueWaveformGeneration` helper. `loadAndPlay` deliberately calls `ensureWaveformForTrack` directly rather than through the queue — routing it through the queue's playback-pause gate caused a regression (the just-loaded track's own waveform/BPM generation would stall for as long as it played), caught and fixed during pre-ship review.
+
+**Completed:** feat/genre-validation (2026-08-12)
