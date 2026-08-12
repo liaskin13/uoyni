@@ -38,8 +38,10 @@ export function amplitudeTodBFS(value, floor = -60) {
 // Maps frequency position + amplitude to 5-band RGB color, Bark critical-band boundaries
 // (Zwicker & Terhardt 1980) — the ear's frequency-*resolution* scale, not octave/pitch
 // spacing. Boundaries below are Hz values 20/534/1230/2579/5927/18000 converted through
-// this file's own log-bar-position formula (freqT = i/(SPEC_N-1), same axis freqLo/freqHi
-// use) so a bar's index and its color boundary agree on the same log scale. See
+// this file's own log-bar-position formula (freqT = i/(SPEC_N-1)). Call sites use
+// i/(SPEC_N-1) while the bin-selection math below uses i/SPEC_N — a pre-existing,
+// sub-perceptible (<1 bar of 150) axis mismatch, not introduced here; not worth
+// realigning unless SPEC_N or the boundaries get tightened further. See
 // /plan-design-review 2026-08-12 ("DECIDED — SA 5-band color scheme, Bark critical-band
 // boundaries") for the full derivation, palette revisions, and colorblind verification.
 // freqT: 0-1 position along the log-spaced 20Hz-18kHz bar axis.
@@ -493,7 +495,11 @@ export default function useAudioAnalyzer({ isPlaying, waveformData, currentTime,
             // Log-spaced frequency edges for this bar
             const freqLo = MIN_FREQ * Math.pow(MAX_FREQ / MIN_FREQ, i / SPEC_N);
             const freqHi = MIN_FREQ * Math.pow(MAX_FREQ / MIN_FREQ, (i + 1) / SPEC_N);
-            const binStart = Math.max(0, Math.floor(freqLo / nyquist * totalBins));
+            // Symmetric clamp — a fixed 44.1kHz nyquist used to make binStart's
+            // upper bound a no-op (freqLo could never exceed it); now that nyquist
+            // reads the live sampleRate, a device under ~36kHz needs this clamp or
+            // the top bars silently go dead (binStart > binEnd, sum stays 0).
+            const binStart = Math.min(totalBins, Math.max(0, Math.floor(freqLo / nyquist * totalBins)));
             const binEnd   = Math.min(totalBins, Math.ceil(freqHi / nyquist * totalBins));
             let sum = 0;
             for (let b = binStart; b < binEnd; b++) sum += freqBins[b];
