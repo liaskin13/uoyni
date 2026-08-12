@@ -4,7 +4,7 @@
 
 - **What this is:** A cinematic, artist-first music platform. Sovereign infrastructure for independent creators.
 - **Who it's for:** M³ tiers — MASTERS (D and L), MUSES (invited collaborators), MEMBERS (paying listeners).
-- **Space/industry:** Music , archival, and selective sharing. Not a streaming platform — a private instrument.
+- **Space/industry:** Music , archival, and selective sharing. Not simply a streaming platform — a private instrument.
 - **Project type:** Web app / artist console system.
 
 ## Memorable Thing

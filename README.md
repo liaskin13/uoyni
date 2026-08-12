@@ -30,7 +30,7 @@ A visually striking, high-fidelity environment where skill, authenticity, and in
 ## Stack & Architecture
 
 * **Frontend:** React, Three.js, Web Audio API
-* **Backend:** Supabase (audio storage, track metadata, real-time presence)
+* **Backend:** cloudfare (audio storage, live streaming, track metadata, real-time presence)
 * **Task Management:** Tracked via `tasks/todo.md`, `tasks/lessons.md`, and `tasks/plan.active.md`
 * **Workflow:** See `CLAUDE.md` for AI-assisted development conventions and guidelines.
 
