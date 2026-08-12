@@ -239,6 +239,18 @@ export function quantizeToBeat(timeSec, bpmAt, offsetSec = 0) {
   return offsetSec + Math.round((timeSec - offsetSec) / beatSeconds) * beatSeconds;
 }
 
+// Extracted for unit testing — routes a track through the existing sequential
+// waveformQueueRef/runWaveformQueue pipeline instead of calling
+// ensureWaveformForTrack directly. Two call sites (handleUpload, loadAndPlay)
+// used to bypass the queue, causing one concurrent AudioContext decode per
+// track on a multi-file drop. queueRef holds track objects (not bare ids) —
+// matches runWaveformQueue's existing shift()+ensureWaveformForTrack(track)
+// contract, same shape the initial-load queue already populates it with.
+export function enqueueWaveformGeneration(track, queueRef, runQueueFn) {
+  queueRef.current.push(track);
+  runQueueFn();
+}
+
 function vaultLabel(id) {
   if (!id) return "—";
   if (id.startsWith(LOCKBOX_PREFIX))
@@ -662,7 +674,7 @@ function ArchitectConsole({
       loadTracks();
       const newTrack = e?.detail;
       if (newTrack?.id && newTrack.audio_path) {
-        ensureWaveformForTrack(newTrack, true);
+        enqueueWaveformGeneration(newTrack, waveformQueueRef, runWaveformQueue);
       }
     };
     window.addEventListener("psc:track-uploaded", handleUpload);
@@ -885,7 +897,7 @@ function ArchitectConsole({
       audioEngine.play();
       announce(`Playing ${track.title || "track"}.`);
       loadWaveformBinaryForDeck(track.id);
-      if (!track.waveform_data) ensureWaveformForTrack(track);
+      if (!track.waveform_data) enqueueWaveformGeneration(track, waveformQueueRef, runWaveformQueue);
     } catch (err) {
       console.error("[PSC] Audio load error:", err);
       setAudioError(err.message);
@@ -3110,6 +3122,11 @@ function ArchitectConsole({
                   onClick={handlePublishSelected}
                   disabled={
                     !selectionHasStaged || publishState.status === "pending"
+                  }
+                  title={
+                    selectedTrackIds.size === 0
+                      ? "Select tracks via the checkbox to publish"
+                      : undefined
                   }
                 >
                   {publishState.status === "pending"

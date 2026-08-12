@@ -181,48 +181,138 @@ export function dpBeatTrack(envelope, opts = {}) {
   };
 }
 
-const DRIFT_WINDOW_BEATS = 16; // ~4 bars — enough beats per window for a stable average
+const DRIFT_WINDOW_SEC = 8; // per-window duration for independent tempo re-estimation
 const DRIFT_THRESHOLD_PCT = 4; // matches typical live-mix tempo-drift tolerance before it's audible
+const MAX_CORROBORATION_GAP_SEC = DRIFT_WINDOW_SEC * 2; // 16s — beyond this, a "corroborating" reading is too far away in time to trust as evidence of the SAME drift event, not a coincidentally similar one
+const ONSET_SNAP_MAX_SEC = 0.07; // mir_eval's standard F-measure onset tolerance (70ms)
+const ONSET_SNAP_PHASE_PCT = 0.175; // mir_eval's continuity_phase_threshold — fraction of the beat period
 
 /**
- * Detects genuine tempo drift across a track from the DP tracker's own beat
- * times (dpBeatTrack's beatTimesSec), for auto-seeding multi-point beatgrid
- * anchors on Regenerate (plan T7). Splits beats into fixed-size windows,
- * averages BPM per window, and starts a new anchor only where the average
- * shifts beyond DRIFT_THRESHOLD_PCT — small measurement jitter between
- * windows does not fragment the grid into meaningless micro-segments.
+ * Finds the strongest local maximum of the onset envelope within
+ * +/-toleranceFrames of targetFrame. A "peak" must be a genuine local max
+ * (>= both neighbors), not just the loudest sample in range — a point on the
+ * rising/falling shoulder of a transient is not itself an onset. Exported
+ * (alongside smoothWindowedTempo) so the onset-snap accept/reject boundary
+ * can be unit-tested directly rather than only indirectly through
+ * detectTempoSegments, where the smoothing/anchor-merge layers on top make
+ * isolating this specific decision hard to observe black-box.
+ *
+ * @returns {number} the peak's frame index, or -1 if no local peak exists in range
+ */
+export function findNearestOnsetPeak(envelope, targetFrame, toleranceFrames) {
+  const lo = Math.max(1, targetFrame - toleranceFrames);
+  const hi = Math.min(envelope.length - 2, targetFrame + toleranceFrames);
+  let bestFrame = -1;
+  let bestVal = 0; // a flat/silent plateau (all-zero envelope) is not a genuine onset — require real positive energy
+  for (let f = lo; f <= hi; f++) {
+    const isLocalPeak = envelope[f] >= envelope[f - 1] && envelope[f] >= envelope[f + 1];
+    if (isLocalPeak && envelope[f] > bestVal) {
+      bestVal = envelope[f];
+      bestFrame = f;
+    }
+  }
+  return bestFrame;
+}
+
+/**
+ * Smooths per-window tempo estimates via reject-then-corroborate: a
+ * candidate drift (a window differing from the last confirmed BPM by
+ * >=driftThresholdPct) is only accepted if the NEXT window corroborates it
+ * (within corroborationTolerancePct) AND is close enough in TIME to be
+ * trustworthy evidence — onset-snapping upstream can skip windows entirely,
+ * so array adjacency does not imply ~8s time adjacency. A single
+ * uncorroborated window (noise) is held flat at the last confirmed value,
+ * never allowed to seed a new anchor on its own.
+ *
+ * @param {{time:number, bpm:number}[]} windows
+ * @returns {{time:number, bpm:number}[]}
+ */
+export function smoothWindowedTempo(windows, opts = {}) {
+  const driftThresholdPct = opts.driftThresholdPct ?? DRIFT_THRESHOLD_PCT;
+  const corroborationTolerancePct = opts.corroborationTolerancePct ?? 3; // tighter than driftThresholdPct — see plan rationale
+  const maxGapSec = opts.maxGapSec ?? MAX_CORROBORATION_GAP_SEC;
+
+  if (!windows || windows.length <= 1) return windows ?? [];
+
+  const pctDiff = (a, b) => (Math.abs(a - b) / b) * 100;
+  const confirmed = [windows[0].bpm];
+
+  for (let i = 1; i < windows.length; i++) {
+    const prevConfirmed = confirmed[i - 1];
+    const raw = windows[i].bpm;
+
+    if (pctDiff(raw, prevConfirmed) < driftThresholdPct) {
+      confirmed.push(prevConfirmed); // not a meaningful change — hold flat
+      continue;
+    }
+
+    const next = windows[i + 1];
+    const withinTimeRange = next && (next.time - windows[i].time) <= maxGapSec;
+    const corroborated = withinTimeRange && pctDiff(next.bpm, raw) <= corroborationTolerancePct;
+    confirmed.push(corroborated ? raw : prevConfirmed);
+  }
+
+  return windows.map((w, i) => ({ ...w, bpm: confirmed[i] }));
+}
+
+/**
+ * Detects genuine tempo drift across a track by independently re-estimating
+ * tempo per fixed-duration window of the raw onset envelope (NOT from
+ * dpBeatTrack's own beat times — dpBeatTrack's alpha=400 transition-cost
+ * penalty forces beat spacing toward near-constant, which averages real
+ * drift away before it can be seen). Each window's time anchor is snapped to
+ * the nearest genuine onset peak within mir_eval-grounded tolerance so
+ * anchors land on audible beats, not raw window boundaries — a window with
+ * no onset peak in tolerance is skipped rather than seeding a bad anchor,
+ * which means the windows array can have gaps in TIME while staying
+ * contiguous in array index (see smoothWindowedTempo, which accounts for
+ * this). Estimates are then smoothed via reject-then-corroborate before the
+ * final threshold-merge into anchors, so isolated noisy windows can't seed a
+ * spurious anchor on their own.
  *
  * Returns null when there isn't enough data to say anything meaningful, or
  * when no window drifts beyond the threshold — callers should leave
  * beat_grid_points unset in that case (today's flat-BPM behavior, matching
  * every existing track), not write a single-anchor array.
  *
+ * @param {number[]} envelope onset strength per frame (from onsetEnvelope)
+ * @param {number} frameRate frames per second (matches the bars' bars/sec, typically 50)
  * @returns {{time:number, bpm:number}[] | null}
  */
-export function detectTempoSegments(beatTimesSec, opts = {}) {
-  const windowBeats = opts.windowBeats ?? DRIFT_WINDOW_BEATS;
+export function detectTempoSegments(envelope, frameRate, opts = {}) {
+  const windowSec = opts.windowSec ?? DRIFT_WINDOW_SEC;
   const driftThresholdPct = opts.driftThresholdPct ?? DRIFT_THRESHOLD_PCT;
+  const windowFrames = Math.round(windowSec * frameRate);
 
-  if (!beatTimesSec || beatTimesSec.length < windowBeats * 2) return null;
+  if (!envelope || envelope.length < windowFrames * 2) return null;
 
-  const windows = [];
-  for (let i = 0; i + windowBeats < beatTimesSec.length; i += windowBeats) {
-    const start = beatTimesSec[i];
-    const end = beatTimesSec[i + windowBeats];
-    const avgBeatSec = (end - start) / windowBeats;
-    if (avgBeatSec <= 0) continue;
-    windows.push({ time: start, bpm: 60 / avgBeatSec });
+  const rawWindows = [];
+  for (let start = 0; start + windowFrames <= envelope.length; start += windowFrames) {
+    const slice = envelope.slice(start, start + windowFrames);
+    const tempo = estimateTempoPeriod(slice, frameRate);
+    if (!tempo) continue; // too quiet / no discernible periodicity in this window — skip, don't guess
+
+    const beatPeriodSec = 60 / tempo.bpm;
+    const toleranceSec = Math.min(ONSET_SNAP_MAX_SEC, beatPeriodSec * ONSET_SNAP_PHASE_PCT);
+    const toleranceFrames = Math.max(1, Math.round(toleranceSec * frameRate));
+    const snappedFrame = findNearestOnsetPeak(envelope, start, toleranceFrames);
+    if (snappedFrame < 0) continue; // no genuine onset peak in tolerance — skip rather than seed a bad anchor
+
+    rawWindows.push({ time: snappedFrame / frameRate, bpm: Math.round(tempo.bpm * 100) / 100 });
   }
-  if (windows.length < 2) return null;
 
-  const anchors = [windows[0]];
-  for (let i = 1; i < windows.length; i++) {
+  if (rawWindows.length < 2) return null;
+
+  const smoothed = smoothWindowedTempo(rawWindows, { driftThresholdPct });
+
+  const anchors = [smoothed[0]];
+  for (let i = 1; i < smoothed.length; i++) {
     const last = anchors[anchors.length - 1];
-    const pctDiff = (Math.abs(windows[i].bpm - last.bpm) / last.bpm) * 100;
-    if (pctDiff >= driftThresholdPct) anchors.push(windows[i]);
+    const pctDiff = (Math.abs(smoothed[i].bpm - last.bpm) / last.bpm) * 100;
+    if (pctDiff >= driftThresholdPct) anchors.push(smoothed[i]);
   }
 
   if (anchors.length < 2) return null; // no meaningful drift found
 
-  return anchors.map((a) => ({ time: a.time, bpm: Math.round(a.bpm * 100) / 100 }));
+  return anchors.map((a) => ({ time: a.time, bpm: a.bpm }));
 }

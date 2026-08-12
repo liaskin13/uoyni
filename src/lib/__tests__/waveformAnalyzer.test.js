@@ -10,6 +10,7 @@ import {
   WAVEFORM_V2_SENTINEL,
   packToBinary,
   unpackFromBinary,
+  analyzeAudio,
 } from "../waveformAnalyzer";
 
 // ── WAVEFORM_V2_SENTINEL ──────────────────────────────────────────────────────
@@ -149,5 +150,68 @@ describe("packToBinary / unpackFromBinary round-trip", () => {
     }));
     const recovered = unpackFromBinary(packToBinary(bars));
     expect(recovered).toHaveLength(50000);
+  });
+});
+
+// ── analyzeAudio — AudioContext lifecycle ───────────────────────────────────
+//
+// This test file runs in the node environment (see @vitest-environment above),
+// which has no Web Audio API at all — global.fetch/AudioContext are mocked
+// directly rather than relying on jsdom. No AudioContext mock pattern existed
+// anywhere in this repo before this test; establishing one here.
+
+function makeFakeAudioBuffer() {
+  return {
+    sampleRate: 44100,
+    duration: 1,
+    getChannelData: () => new Float32Array(1000).fill(0.1),
+  };
+}
+
+function mockFetchOk() {
+  global.fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
+  });
+}
+
+describe("analyzeAudio — AudioContext lifecycle", () => {
+  const originalFetch = global.fetch;
+  const originalAudioContext = global.AudioContext;
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    global.AudioContext = originalAudioContext;
+  });
+
+  it("closes the AudioContext after a successful decode", async () => {
+    mockFetchOk();
+    const close = vi.fn();
+    global.AudioContext = vi.fn(function FakeAudioContext() {
+      this.decodeAudioData = vi.fn().mockResolvedValue(makeFakeAudioBuffer());
+      this.close = close;
+    });
+
+    await analyzeAudio("https://example.com/track.mp3", null, 5, 5);
+
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("closes the AudioContext even when decode throws", async () => {
+    mockFetchOk();
+    const close = vi.fn();
+    global.AudioContext = vi.fn(function FakeAudioContext() {
+      this.decodeAudioData = vi.fn().mockRejectedValue(new Error("corrupt audio data"));
+      this.close = close;
+    });
+
+    await expect(
+      analyzeAudio("https://example.com/track.mp3", null, 5, 5),
+    ).rejects.toThrow("corrupt audio data");
+
+    // This is the line that proves the fix — close() must fire in the
+    // failure path too, not just the happy path.
+    expect(close).toHaveBeenCalledOnce();
   });
 });
