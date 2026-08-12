@@ -10,6 +10,7 @@ const PEAK_TICK   = "rgba(240,237,232,0.85)";
 const SPEC_N      = 150;
 const FLOOR_PCT   = 0.06; // minimum bar height as fraction of canvas height
 const BPM_BUF_SIZE = 240; // 4 seconds × ~60 Hz rAF rate
+const BPM_BASS_CUTOFF_HZ = 860; // matches the original fixed 40-bin cutoff at fftSize=2048 (44.1kHz: 40 * 22050/1024 ≈ 861Hz)
 
 // VU meter scale: 0 VU = -18 dBFS (SMPTE standard). Single source of truth —
 // both the live rAF loop (needle normalization) and drawVuNeedle() (arc geometry
@@ -44,10 +45,10 @@ export function amplitudeTodBFS(value, floor = -60) {
 // freqT: 0-1 position along the log-spaced 20Hz-18kHz bar axis.
 // normH: 0-1 amplitude — scales opacity; brighter = louder.
 // Exported for unit testing.
-const BAND_LOW_MIDLOW_T   = 0.482869; // 534Hz
-const BAND_MIDLOW_MID_T   = 0.605528; // 1230Hz
-const BAND_MID_MIDHIGH_T  = 0.714370; // 2579Hz
-const BAND_MIDHIGH_HIGH_T = 0.836697; // 5927Hz
+export const BAND_LOW_MIDLOW_T   = 0.482869; // 534Hz
+export const BAND_MIDLOW_MID_T   = 0.605528; // 1230Hz
+export const BAND_MID_MIDHIGH_T  = 0.714370; // 2579Hz
+export const BAND_MIDHIGH_HIGH_T = 0.836697; // 5927Hz
 
 export function specBarColor(normH, freqT, alpha = 1) {
   let r, g, b;
@@ -440,7 +441,13 @@ export default function useAudioAnalyzer({ isPlaying, waveformData, currentTime,
 
         // BPM ring: write bass-bin RMS each frame; detect every 30 frames (~500ms)
         if (freqBins) {
-          const bassEnd = Math.min(40, freqBins.length);
+          // Hz-stable bass window — a fixed bin count would silently narrow this
+          // range whenever fftSize/frequencyBinCount changes (see BPM_BASS_CUTOFF_HZ).
+          const nyquistHz = audioCtxRef.current.sampleRate / 2;
+          const bassEnd = Math.min(
+            Math.max(1, Math.round((BPM_BASS_CUTOFF_HZ / nyquistHz) * freqBins.length)),
+            freqBins.length,
+          );
           let bassSum = 0;
           for (let i = 0; i < bassEnd; i++) bassSum += freqBins[i];
           const bassRms = bassSum / (bassEnd * 255);
@@ -476,7 +483,7 @@ export default function useAudioAnalyzer({ isPlaying, waveformData, currentTime,
         const FLOOR    = Math.round(H * FLOOR_PCT);
 
         if (freqBins) {
-          // Live FFT path: map 1024 frequency bins to SPEC_N bars using logarithmic frequency spacing
+          // Live FFT path: map frequencyBinCount bins to SPEC_N bars using logarithmic frequency spacing
           // Human hearing is logarithmic: 20Hz–18kHz should occupy bars evenly in perceived frequency
           const MIN_FREQ = 20;    // Hz — bottom of human hearing
           const MAX_FREQ = 18000; // Hz — top of useful music range (below Nyquist for 44.1kHz)

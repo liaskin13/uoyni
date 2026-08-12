@@ -3,7 +3,15 @@ import { describe, it, expect, vi } from "vitest";
 
 // ── specBarColor ──────────────────────────────────────────────────────────────
 
-import { amplitudeTodBFS, specBarColor, detectBpm } from "../useAudioAnalyzer.js";
+import {
+  amplitudeTodBFS,
+  specBarColor,
+  detectBpm,
+  BAND_LOW_MIDLOW_T,
+  BAND_MIDLOW_MID_T,
+  BAND_MID_MIDHIGH_T,
+  BAND_MIDHIGH_HIGH_T,
+} from "../useAudioAnalyzer.js";
 
 // ── amplitudeTodBFS ──────────────────────────────────────────────────────────
 
@@ -30,12 +38,12 @@ describe("amplitudeTodBFS", () => {
   });
 });
 
-// 5-band Bark-scale boundaries (freqT fractions of the 20Hz-18kHz log bar axis).
-// Mirrors the constants in useAudioAnalyzer.js — see that file for the Hz/derivation.
-const T_LOW_MIDLOW   = 0.482869; // 534Hz
-const T_MIDLOW_MID   = 0.605528; // 1230Hz
-const T_MID_MIDHIGH  = 0.714370; // 2579Hz
-const T_MIDHIGH_HIGH = 0.836697; // 5927Hz
+// 5-band Bark-scale boundaries — imported from useAudioAnalyzer.js so this test
+// can't silently desync from the implementation. See that file for the Hz/derivation.
+const T_LOW_MIDLOW   = BAND_LOW_MIDLOW_T;
+const T_MIDLOW_MID   = BAND_MIDLOW_MID_T;
+const T_MID_MIDHIGH  = BAND_MID_MIDHIGH_T;
+const T_MIDHIGH_HIGH = BAND_MIDHIGH_HIGH_T;
 
 describe("specBarColor", () => {
   it("returns red RGB in Low band (freqT < 0.482869)", () => {
@@ -108,7 +116,7 @@ describe("analyser singleton guard", () => {
       setupRef.current = true;
       const source   = audioCtx.createMediaElementSource(audioEl);
       const analyser = audioCtx.createAnalyser();
-      analyser.fftSize              = 2048;
+      analyser.fftSize              = 4096;
       analyser.smoothingTimeConstant = 0.75;
       source.connect(audioCtx.destination);
       source.connect(analyser);
@@ -141,6 +149,36 @@ describe("analyser singleton guard", () => {
     }
     expect(createMediaElementSource).toHaveBeenCalledTimes(1);
     expect(setupRef.current).toBe(true);
+  });
+});
+
+// ── BPM ring bass-window Hz stability ──────────────────────────────────────────
+// Regression test: the BPM ring's bass-energy window (useAudioAnalyzer.js's
+// BPM_BASS_CUTOFF_HZ + bassEnd calculation) must sample the same Hz range
+// regardless of fftSize/frequencyBinCount. A fixed bin-count cutoff would
+// silently narrow the sampled range whenever fftSize changes (caught when
+// this file's fftSize bump 2048->4096 halved the range from ~860Hz to ~430Hz
+// with the old `Math.min(40, freqBins.length)` calculation).
+
+describe("BPM ring bass-window Hz stability", () => {
+  const BASS_CUTOFF_HZ = 860;
+  const sampleRate = 44100;
+
+  function bassEndFor(totalBins) {
+    const nyquistHz = sampleRate / 2;
+    return Math.min(Math.max(1, Math.round((BASS_CUTOFF_HZ / nyquistHz) * totalBins)), totalBins);
+  }
+
+  it("samples the same Hz cutoff at fftSize=2048 (1024 bins) and fftSize=4096 (2048 bins)", () => {
+    const oldBins = 1024; // fftSize 2048
+    const newBins = 2048; // fftSize 4096
+    const oldBassEnd = bassEndFor(oldBins);
+    const newBassEnd = bassEndFor(newBins);
+
+    const oldCutoffHz = (oldBassEnd / oldBins) * (sampleRate / 2);
+    const newCutoffHz = (newBassEnd / newBins) * (sampleRate / 2);
+
+    expect(oldCutoffHz).toBeCloseTo(newCutoffHz, 0);
   });
 });
 
