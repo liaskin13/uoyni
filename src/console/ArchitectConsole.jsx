@@ -897,7 +897,14 @@ function ArchitectConsole({
       audioEngine.play();
       announce(`Playing ${track.title || "track"}.`);
       loadWaveformBinaryForDeck(track.id);
-      if (!track.waveform_data) enqueueWaveformGeneration(track, waveformQueueRef, runWaveformQueue);
+      // Direct call, not the shared queue: the queue's pause-while-playing gate
+      // (runWaveformQueue) exists to throttle the BACKGROUND backlog, but this is
+      // the single track just loaded onto the deck — routing it through that gate
+      // would stall its own waveform/BPM/beatgrid generation for as long as it
+      // plays. The AudioContext-leak fix this queue was introduced alongside lives
+      // in analyzeAudio()'s try/finally, not in queue routing, so bypassing the
+      // queue here doesn't reopen it.
+      if (!track.waveform_data) ensureWaveformForTrack(track);
     } catch (err) {
       console.error("[PSC] Audio load error:", err);
       setAudioError(err.message);

@@ -183,6 +183,7 @@ export function dpBeatTrack(envelope, opts = {}) {
 
 const DRIFT_WINDOW_SEC = 8; // per-window duration for independent tempo re-estimation
 const DRIFT_THRESHOLD_PCT = 4; // matches typical live-mix tempo-drift tolerance before it's audible
+const CORROBORATION_TOLERANCE_PCT = 3; // tighter than DRIFT_THRESHOLD_PCT — see smoothWindowedTempo
 const MAX_CORROBORATION_GAP_SEC = DRIFT_WINDOW_SEC * 2; // 16s — beyond this, a "corroborating" reading is too far away in time to trust as evidence of the SAME drift event, not a coincidentally similar one
 const ONSET_SNAP_MAX_SEC = 0.07; // mir_eval's standard F-measure onset tolerance (70ms)
 const ONSET_SNAP_PHASE_PCT = 0.175; // mir_eval's continuity_phase_threshold — fraction of the beat period
@@ -200,12 +201,15 @@ const ONSET_SNAP_PHASE_PCT = 0.175; // mir_eval's continuity_phase_threshold —
  * @returns {number} the peak's frame index, or -1 if no local peak exists in range
  */
 export function findNearestOnsetPeak(envelope, targetFrame, toleranceFrames) {
-  const lo = Math.max(1, targetFrame - toleranceFrames);
+  const lo = Math.max(0, targetFrame - toleranceFrames);
   const hi = Math.min(envelope.length - 2, targetFrame + toleranceFrames);
   let bestFrame = -1;
   let bestVal = 0; // a flat/silent plateau (all-zero envelope) is not a genuine onset — require real positive energy
   for (let f = lo; f <= hi; f++) {
-    const isLocalPeak = envelope[f] >= envelope[f - 1] && envelope[f] >= envelope[f + 1];
+    // Frame 0 has no left neighbor — a peak there only needs to beat envelope[1],
+    // not clear a nonexistent envelope[-1] (previously excluded frame 0 entirely,
+    // so a genuine onset at the very start of a window could never be snapped to).
+    const isLocalPeak = (f === 0 || envelope[f] >= envelope[f - 1]) && envelope[f] >= envelope[f + 1];
     if (isLocalPeak && envelope[f] > bestVal) {
       bestVal = envelope[f];
       bestFrame = f;
@@ -225,11 +229,15 @@ export function findNearestOnsetPeak(envelope, targetFrame, toleranceFrames) {
  * never allowed to seed a new anchor on its own.
  *
  * @param {{time:number, bpm:number}[]} windows
+ * @param {object} [opts]
+ * @param {number} [opts.driftThresholdPct] minimum % change from the last confirmed BPM to count as a drift candidate (default DRIFT_THRESHOLD_PCT)
+ * @param {number} [opts.corroborationTolerancePct] max % the next window's BPM may differ from the candidate to count as corroboration (default CORROBORATION_TOLERANCE_PCT)
+ * @param {number} [opts.maxGapSec] max time gap to the corroborating window before it's too far away to trust (default MAX_CORROBORATION_GAP_SEC)
  * @returns {{time:number, bpm:number}[]}
  */
 export function smoothWindowedTempo(windows, opts = {}) {
   const driftThresholdPct = opts.driftThresholdPct ?? DRIFT_THRESHOLD_PCT;
-  const corroborationTolerancePct = opts.corroborationTolerancePct ?? 3; // tighter than driftThresholdPct — see plan rationale
+  const corroborationTolerancePct = opts.corroborationTolerancePct ?? CORROBORATION_TOLERANCE_PCT;
   const maxGapSec = opts.maxGapSec ?? MAX_CORROBORATION_GAP_SEC;
 
   if (!windows || windows.length <= 1) return windows ?? [];
@@ -284,7 +292,9 @@ export function detectTempoSegments(envelope, frameRate, opts = {}) {
   const driftThresholdPct = opts.driftThresholdPct ?? DRIFT_THRESHOLD_PCT;
   const windowFrames = Math.round(windowSec * frameRate);
 
-  if (!envelope || envelope.length < windowFrames * 2) return null;
+  // windowFrames <= 0 (frameRate/windowSec zero or negative) would make the
+  // window-accumulation loop below spin forever — start never advances.
+  if (!envelope || windowFrames <= 0 || envelope.length < windowFrames * 2) return null;
 
   const rawWindows = [];
   for (let start = 0; start + windowFrames <= envelope.length; start += windowFrames) {

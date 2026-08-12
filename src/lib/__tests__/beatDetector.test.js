@@ -318,4 +318,26 @@ describe("findNearestOnsetPeak", () => {
     const env = [0, 0.5, 0.2, 0.9, 0.2, 0.5, 0]; // two local peaks: index 1 (0.5) and index 3 (0.9), index 5 also a peak (0.5, boundary)
     expect(findNearestOnsetPeak(env, 3, 3)).toBe(3); // strongest wins, not just nearest
   });
+
+  it("finds a genuine onset peak at frame 0 (no left neighbor to compare against)", () => {
+    const env = [0.9, 0.2, 0, 0, 0];
+    expect(findNearestOnsetPeak(env, 0, 1)).toBe(0);
+  });
+});
+
+describe("detectTempoSegments — invalid frameRate/windowSec must not hang", () => {
+  it("returns null instead of looping forever when frameRate is 0", () => {
+    const envelope = new Array(2000).fill(0.5);
+    expect(detectTempoSegments(envelope, 0)).toBeNull();
+  });
+
+  it("returns null instead of looping forever when frameRate is negative", () => {
+    const envelope = new Array(2000).fill(0.5);
+    expect(detectTempoSegments(envelope, -50)).toBeNull();
+  });
+
+  it("returns null instead of looping forever when opts.windowSec is 0", () => {
+    const envelope = new Array(2000).fill(0.5);
+    expect(detectTempoSegments(envelope, 50, { windowSec: 0 })).toBeNull();
+  });
 });
