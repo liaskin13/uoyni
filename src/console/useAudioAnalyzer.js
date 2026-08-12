@@ -34,28 +34,47 @@ export function amplitudeTodBFS(value, floor = -60) {
   return Math.max(floor, dbfs);
 }
 
-// Maps frequency position + amplitude to 3-band RGB color (PSC original, screen-blend aesthetic).
-// freqT: 0 = bass (red), 0.5 = mid (green), 1.0 = high (cyan).
+// Maps frequency position + amplitude to 5-band RGB color, Bark critical-band boundaries
+// (Zwicker & Terhardt 1980) — the ear's frequency-*resolution* scale, not octave/pitch
+// spacing. Boundaries below are Hz values 20/534/1230/2579/5927/18000 converted through
+// this file's own log-bar-position formula (freqT = i/(SPEC_N-1), same axis freqLo/freqHi
+// use) so a bar's index and its color boundary agree on the same log scale. See
+// /plan-design-review 2026-08-12 ("DECIDED — SA 5-band color scheme, Bark critical-band
+// boundaries") for the full derivation, palette revisions, and colorblind verification.
+// freqT: 0-1 position along the log-spaced 20Hz-18kHz bar axis.
 // normH: 0-1 amplitude — scales opacity; brighter = louder.
-// bass=RED #ff0000, mid=GREEN #00ff00, high=CYAN #00ffff — matches DeckWaveformV2 waveform bands.
 // Exported for unit testing.
+const BAND_LOW_MIDLOW_T   = 0.482869; // 534Hz
+const BAND_MIDLOW_MID_T   = 0.605528; // 1230Hz
+const BAND_MID_MIDHIGH_T  = 0.714370; // 2579Hz
+const BAND_MIDHIGH_HIGH_T = 0.836697; // 5927Hz
+
 export function specBarColor(normH, freqT, alpha = 1) {
-  // 3-band RGB model (PSC forward-thinking)
   let r, g, b;
-  if (freqT < 0.33) {
-    // Bass: red
+  if (freqT < BAND_LOW_MIDLOW_T) {
+    // Low: red (unchanged anchor)
     r = 255;
     g = 0;
     b = 0;
-  } else if (freqT < 0.67) {
-    // Mid: green
+  } else if (freqT < BAND_MIDLOW_MID_T) {
+    // Mid-low: red-orange #ff5500 (deuteranopia-safety revision — see plan doc)
+    r = 255;
+    g = 85;
+    b = 0;
+  } else if (freqT < BAND_MID_MIDHIGH_T) {
+    // Mid: green (unchanged anchor)
     r = 0;
     g = 255;
     b = 0;
-  } else {
-    // High: cyan
+  } else if (freqT < BAND_MIDHIGH_HIGH_T) {
+    // Mid-high: cyan #00ffff (moved down from the old 3-band High anchor)
     r = 0;
     g = 255;
+    b = 255;
+  } else {
+    // High: indigo #6600ff (ROYGBIV-correct top anchor, not an interpolated hue)
+    r = 102;
+    g = 0;
     b = 255;
   }
   // Amplitude modulates opacity: low amp = dim, high amp = bright
@@ -142,7 +161,7 @@ export default function useAudioAnalyzer({ isPlaying, waveformData, currentTime,
 
       const source   = audioCtx.createMediaElementSource(audioEl);
       const analyser = audioCtx.createAnalyser();
-      analyser.fftSize               = 2048; // 1024 frequency bins
+      analyser.fftSize               = 4096; // 2048 frequency bins — halves duplicate-bar count in sub-150Hz SA bars vs. 2048
       analyser.smoothingTimeConstant = 0.75;
 
       // Phase correlation: split stereo into L/R channels for mono compatibility detection
@@ -461,7 +480,7 @@ export default function useAudioAnalyzer({ isPlaying, waveformData, currentTime,
           // Human hearing is logarithmic: 20Hz–18kHz should occupy bars evenly in perceived frequency
           const MIN_FREQ = 20;    // Hz — bottom of human hearing
           const MAX_FREQ = 18000; // Hz — top of useful music range (below Nyquist for 44.1kHz)
-          const nyquist  = 44100 / 2;
+          const nyquist  = audioCtxRef.current.sampleRate / 2;
           const totalBins = freqBins.length;
           for (let i = 0; i < SPEC_N; i++) {
             // Log-spaced frequency edges for this bar

@@ -30,30 +30,42 @@ describe("amplitudeTodBFS", () => {
   });
 });
 
+// 5-band Bark-scale boundaries (freqT fractions of the 20Hz-18kHz log bar axis).
+// Mirrors the constants in useAudioAnalyzer.js — see that file for the Hz/derivation.
+const T_LOW_MIDLOW   = 0.482869; // 534Hz
+const T_MIDLOW_MID   = 0.605528; // 1230Hz
+const T_MID_MIDHIGH  = 0.714370; // 2579Hz
+const T_MIDHIGH_HIGH = 0.836697; // 5927Hz
+
 describe("specBarColor", () => {
-  it("returns red RGB at bass (freqT < 0.33)", () => {
+  it("returns red RGB in Low band (freqT < 0.482869)", () => {
     expect(specBarColor(1.0, 0, 1)).toContain("255, 0, 0");
+    expect(specBarColor(1.0, 0.3, 1)).toContain("255, 0, 0");
   });
 
-  it("returns green RGB at mid (freqT 0.33-0.67)", () => {
-    expect(specBarColor(1.0, 0.5, 1)).toContain("0, 255, 0");
+  it("returns red-orange RGB in Mid-low band", () => {
+    expect(specBarColor(1.0, T_LOW_MIDLOW, 1)).toContain("255, 85, 0");
+    expect(specBarColor(1.0, 0.55, 1)).toContain("255, 85, 0");
   });
 
-  it("returns cyan RGB at treble (freqT >= 0.67)", () => {
-    expect(specBarColor(1.0, 1.0, 1)).toContain("0, 255, 255");
+  it("returns green RGB in Mid band", () => {
+    expect(specBarColor(1.0, T_MIDLOW_MID, 1)).toContain("0, 255, 0");
+    expect(specBarColor(1.0, 0.65, 1)).toContain("0, 255, 0");
   });
 
-  it("bass region includes freqT=0.15", () => {
-    expect(specBarColor(1.0, 0.15, 1)).toContain("255, 0, 0");
-  });
-
-  it("high/cyan region includes freqT=0.75", () => {
+  it("returns cyan RGB in Mid-high band", () => {
+    expect(specBarColor(1.0, T_MID_MIDHIGH, 1)).toContain("0, 255, 255");
     expect(specBarColor(1.0, 0.75, 1)).toContain("0, 255, 255");
   });
 
+  it("returns indigo RGB in High band (freqT >= 0.836697)", () => {
+    expect(specBarColor(1.0, T_MIDHIGH_HIGH, 1)).toContain("102, 0, 255");
+    expect(specBarColor(1.0, 1.0, 1)).toContain("102, 0, 255");
+  });
+
   it("amplitude modulates opacity — low normH has floor at 0.2", () => {
-    const dim  = specBarColor(0.1, 0.5, 1);
-    const full = specBarColor(1.0, 0.5, 1);
+    const dim  = specBarColor(0.1, T_MIDLOW_MID, 1);
+    const full = specBarColor(1.0, T_MIDLOW_MID, 1);
     // Both should contain green, but dim should have lower opacity
     expect(dim).toContain("0, 255, 0");
     expect(full).toContain("0, 255, 0");
@@ -70,7 +82,7 @@ describe("specBarColor", () => {
   it("when alpha=1 and normH=1.0, final opacity is 1", () => {
     // With normH=1.0, opacity = max(0.2, 1.0) = 1.0, and alpha defaults to 1
     // So final opacity = 1 * 1 = 1
-    expect(specBarColor(1.0, 0.5, 1)).toContain("rgba(0, 255, 0, 1)");
+    expect(specBarColor(1.0, T_MIDLOW_MID, 1)).toContain("rgba(0, 255, 0, 1)");
   });
 });
 
