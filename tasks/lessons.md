@@ -48,6 +48,25 @@
 
 ---
 
+## CRITICAL: detectTempoSegments Must Run on the Raw Onset Envelope, Not dpBeatTrack's Beat Times — Never Revert (2026-08-12)
+
+**The rule:** `detectTempoSegments()` in `src/lib/beatDetector.js` takes `(envelope, frameRate, opts)` — the raw onset envelope — NOT `dpBeatTrack`'s smoothed `beatTimesSec` output. Do not "simplify" the signature back to beat times; that was the original bug, tried and reverted earlier the same day this fix landed.
+
+**Why:** `dpBeatTrack`'s DP tracker uses an `alpha=400` transition-cost penalty that forces beat spacing toward near-constant tempo. Feeding its own smoothed output back into drift detection averages real drift away before it can be measured — the detector could never see the thing it exists to find. The fix independently re-estimates tempo per fixed-duration window of the raw envelope, snaps each window's time anchor to the nearest genuine onset peak (`findNearestOnsetPeak`, mir_eval-grounded ±70ms / 17.5%-of-beat-period tolerance — a window with no peak in tolerance is skipped, not forced), and smooths estimates via reject-then-corroborate (`smoothWindowedTempo`) so one noisy window can never seed a spurious beatgrid anchor alone.
+
+**The history (so we never repeat it):**
+- `7133d8e` (2026-08-12): First attempt ran tempo-drift detection off `dpBeatTrack`'s own smoothed beat times.
+- `e75cab6` (2026-08-12): Reverted same day — wrong data source, real drift got averaged away.
+- `33a2890` (2026-08-12): Correct fix landed — envelope-based re-estimation + onset-snap + reject-then-corroborate smoothing.
+- `0dc2414` (2026-08-12, pre-ship review): Hardened further — guarded `windowFrames<=0` (previously spun forever) and fixed a frame-0 boundary bug in `findNearestOnsetPeak` that silently excluded a genuine onset at the very start of a window.
+
+**What NOT to do:**
+- Do not pass `dpBeatTrack(...).beatTimesSec` into `detectTempoSegments()` — that's the exact bug that was reverted.
+- Do not drop the onset-snap step and anchor on raw window boundaries — anchors will land on inaudible boundaries instead of real beats.
+- Do not skip `smoothWindowedTempo` — without it a single noisy window can seed a spurious beatgrid anchor.
+
+---
+
 ## Agent Routing Calibration Log
 
 Use this template when an intent routes to the wrong custom agent.

@@ -503,6 +503,7 @@ INTAKE is a console-level action. The button lives in the browser utility bar (`
 | 2026-07-24 | Beatgrid anchor editing is paused-only (v1) | Avoids audible glitches from loop/quantize math recalculating mid-playback. L flagged discomfort but didn't relitigate — logged in TODOS.md as not-settled, revisit if D finds it annoying in practice. |
 | 2026-07-24 | Beatgrid anchor idle color = rgba(240,237,232,0.55), same token as unplayed waveform bars | One off-white token for "present but not active" across the whole waveform surface, not a new value invented per element. |
 | 2026-07-24 | Beat/cue grid metadata is console-only, never guest-facing | Same rule as Serato cue labels — D's internal production data, not guest content. |
+| 2026-08-12 | PUBLISH-selection checkbox enlarged 10px→14px, wired to `--arch-muted-rgb`/`--arch-identity` instead of `--arch-accent-rgb` | Was using the wrong achromatic token — accent (labels/headers) instead of muted (structural/inactive controls) — so the checked state had no real identity-color contrast. Fixed alongside a tooltip when nothing is selected. Found via `/investigate`. |
 
 ---
 
@@ -712,7 +713,7 @@ These idle states are intentionally designed as backgrounds, not errors. They co
 | `--arch-identity-rgb` | `20, 220, 20` | `0, 229, 255` | RGB triplet for `rgba()` identity calculations |
 | `--arch-accent` | `rgba(185,185,185,0.9)` | same | Column headers, labels, muted UI text |
 | `--arch-accent-rgb` | `185, 185, 185` | same | Pure achromatic. Zero warmth. |
-| `--arch-muted-rgb` | `185, 185, 185` | same | Structural borders and inactive controls |
+| `--arch-muted-rgb` | `165, 175, 180` | same | Structural borders and inactive controls |
 | `--arch-surface` | `#060606` | same | Console background (distinct from global `--surface`) |
 
 **Planned unification (P2 backlog):** `--arch-identity` → `--identity`, `--arch-accent` → global token. Requires audit of all `--arch-*` usages in ArchitectConsole.css before collapsing.
