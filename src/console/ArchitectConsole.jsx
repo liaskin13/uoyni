@@ -239,6 +239,18 @@ export function quantizeToBeat(timeSec, bpmAt, offsetSec = 0) {
   return offsetSec + Math.round((timeSec - offsetSec) / beatSeconds) * beatSeconds;
 }
 
+// Extracted for unit testing — routes a track through the existing sequential
+// waveformQueueRef/runWaveformQueue pipeline instead of calling
+// ensureWaveformForTrack directly. Two call sites (handleUpload, loadAndPlay)
+// used to bypass the queue, causing one concurrent AudioContext decode per
+// track on a multi-file drop. queueRef holds track objects (not bare ids) —
+// matches runWaveformQueue's existing shift()+ensureWaveformForTrack(track)
+// contract, same shape the initial-load queue already populates it with.
+export function enqueueWaveformGeneration(track, queueRef, runQueueFn) {
+  queueRef.current.push(track);
+  runQueueFn();
+}
+
 function vaultLabel(id) {
   if (!id) return "—";
   if (id.startsWith(LOCKBOX_PREFIX))
@@ -662,7 +674,7 @@ function ArchitectConsole({
       loadTracks();
       const newTrack = e?.detail;
       if (newTrack?.id && newTrack.audio_path) {
-        ensureWaveformForTrack(newTrack, true);
+        enqueueWaveformGeneration(newTrack, waveformQueueRef, runWaveformQueue);
       }
     };
     window.addEventListener("psc:track-uploaded", handleUpload);
@@ -885,6 +897,13 @@ function ArchitectConsole({
       audioEngine.play();
       announce(`Playing ${track.title || "track"}.`);
       loadWaveformBinaryForDeck(track.id);
+      // Direct call, not the shared queue: the queue's pause-while-playing gate
+      // (runWaveformQueue) exists to throttle the BACKGROUND backlog, but this is
+      // the single track just loaded onto the deck — routing it through that gate
+      // would stall its own waveform/BPM/beatgrid generation for as long as it
+      // plays. The AudioContext-leak fix this queue was introduced alongside lives
+      // in analyzeAudio()'s try/finally, not in queue routing, so bypassing the
+      // queue here doesn't reopen it.
       if (!track.waveform_data) ensureWaveformForTrack(track);
     } catch (err) {
       console.error("[PSC] Audio load error:", err);
@@ -3110,6 +3129,11 @@ function ArchitectConsole({
                   onClick={handlePublishSelected}
                   disabled={
                     !selectionHasStaged || publishState.status === "pending"
+                  }
+                  title={
+                    selectedTrackIds.size === 0
+                      ? "Select tracks via the checkbox to publish"
+                      : undefined
                   }
                 >
                   {publishState.status === "pending"

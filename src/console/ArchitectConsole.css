@@ -2327,17 +2327,17 @@
 }
 
 .arch-track-checkbox {
-  width: 10px;
-  height: 10px;
-  border: 1px solid rgba(var(--arch-accent-rgb), 0.2);
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgba(var(--arch-muted-rgb), 0.45);
   background: transparent;
   display: block;
   transition: border-color 0.1s, background 0.1s;
 }
 
 .arch-track-checkbox.is-checked {
-  border-color: rgba(var(--arch-accent-rgb), 0.7);
-  background: rgba(var(--arch-accent-rgb), 0.18);
+  border-color: var(--arch-identity);
+  background: rgba(var(--arch-identity-rgb), 0.22);
 }
 
 .arch-track-row.checked {

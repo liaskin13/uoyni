@@ -1,12 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { onsetEnvelope, dpBeatTrack, detectTempoSegments } from "../beatDetector";
-
-function constantBeatTimes(bpm, count, startTime = 0) {
-  const beatSec = 60 / bpm;
-  return Array.from({ length: count }, (_, i) => startTime + i * beatSec);
-}
+import {
+  onsetEnvelope,
+  dpBeatTrack,
+  detectTempoSegments,
+  smoothWindowedTempo,
+  findNearestOnsetPeak,
+} from "../beatDetector";
 
 const FRAME_RATE = 50;
+const DRIFT_WINDOW_SEC = 8;
+const WINDOW_FRAMES = DRIFT_WINDOW_SEC * FRAME_RATE; // 400
 
 // Builds a synthetic bars array (what analyzeAudio() would return) with a
 // sharp peak/high spike every `periodFrames`, simulating a click track at a
@@ -23,6 +26,17 @@ function syntheticClickBars(bpm, durationSec, { jitter = 0, noiseFloor = 0.02 } 
     bars.push({ bass: spike, mid: noiseFloor, high: spike + j, peak: spike });
   }
   return bars;
+}
+
+// Builds an onset envelope for a track whose tempo changes at segment
+// boundaries — concatenates independent syntheticClickBars() runs so each
+// segment's periodicity is genuinely local, the same shape dpBeatTrack's
+// globally-smoothed beatTimesSec could NOT represent (that's the bug the
+// windowed-envelope approach fixes: drift detection must run on the raw
+// envelope, not on a beat sequence already forced toward a single tempo).
+function multiTempoEnvelope(segments) {
+  const bars = segments.flatMap(({ bpm, durationSec }) => syntheticClickBars(bpm, durationSec));
+  return onsetEnvelope(bars);
 }
 
 describe("onsetEnvelope", () => {
@@ -148,62 +162,182 @@ describe("dpBeatTrack — octave-error awareness (documented limitation)", () =>
 });
 
 describe("detectTempoSegments", () => {
-  it("returns null for insufficient data (not enough beats to say anything about drift)", () => {
-    expect(detectTempoSegments(null)).toBeNull();
-    expect(detectTempoSegments([])).toBeNull();
-    expect(detectTempoSegments(constantBeatTimes(120, 10))).toBeNull();
+  it("returns null for insufficient data (not enough windows to say anything about drift)", () => {
+    expect(detectTempoSegments(null, FRAME_RATE)).toBeNull();
+    expect(detectTempoSegments([], FRAME_RATE)).toBeNull();
+    const shortEnv = multiTempoEnvelope([{ bpm: 120, durationSec: 5 }]); // well under 2 windows (16s)
+    expect(detectTempoSegments(shortEnv, FRAME_RATE)).toBeNull();
   });
 
   it("returns null for a track with constant tempo — MUST NOT write a spurious single-anchor grid", () => {
-    // 200 beats at a rock-steady 128 BPM.
-    const beats = constantBeatTimes(128, 200);
-    expect(detectTempoSegments(beats)).toBeNull();
-  });
-
-  it("tolerates small measurement jitter without fragmenting the grid", () => {
-    const beatSec = 60 / 128;
-    const beats = constantBeatTimes(128, 200).map(
-      (t, i) => t + (i % 2 === 0 ? beatSec * 0.02 : -beatSec * 0.02), // ~2% jitter, well under the 4% threshold
-    );
-    expect(detectTempoSegments(beats)).toBeNull();
+    // 120 BPM's period (25 frames) divides the 400-frame window evenly, so
+    // every window boundary lands exactly on a real onset — isolates "no
+    // drift detected" from any window-snap starvation as the reason for null.
+    const env = multiTempoEnvelope([{ bpm: 120, durationSec: 80 }]);
+    expect(detectTempoSegments(env, FRAME_RATE)).toBeNull();
   });
 
   it("detects a genuine tempo change and places an anchor at the transition", () => {
-    const firstHalf = constantBeatTimes(120, 100, 0);
-    const secondHalfStart = firstHalf[firstHalf.length - 1] + 60 / 120;
-    const secondHalf = constantBeatTimes(140, 100, secondHalfStart);
-    const beats = [...firstHalf, ...secondHalf];
-
-    const anchors = detectTempoSegments(beats);
+    // Both segment durations (40s) are multiples of the 8s window, and both
+    // BPMs' periods (25 and 20 frames) divide the 400-frame window evenly —
+    // every window boundary in both segments lands exactly on a real onset,
+    // and the transition falls exactly on a window boundary (window 5, 40s).
+    const env = multiTempoEnvelope([
+      { bpm: 120, durationSec: 40 },
+      { bpm: 150, durationSec: 40 },
+    ]);
+    const anchors = detectTempoSegments(env, FRAME_RATE);
     expect(anchors).not.toBeNull();
     expect(anchors.length).toBeGreaterThanOrEqual(2);
     expect(anchors[0].bpm).toBeCloseTo(120, 0);
-    expect(anchors[anchors.length - 1].bpm).toBeCloseTo(140, 0);
-    // The transition anchor should land near where the tempo actually changed.
-    const transitionAnchor = anchors.find((a) => a.time > 0);
-    expect(transitionAnchor.time).toBeGreaterThan(30);
-    expect(transitionAnchor.time).toBeLessThan(60);
+    expect(anchors[anchors.length - 1].bpm).toBeCloseTo(150, 0);
+    // anchors[0].time is snapped to the nearest real onset near t=0, which
+    // may itself be a frame or two off zero — "time > 0" alone can't
+    // distinguish that from the actual transition, so require it be well
+    // into the track (only the transition anchor should qualify).
+    const transitionAnchor = anchors.find((a) => a.time > 5);
+    expect(transitionAnchor).toBeDefined();
+    expect(transitionAnchor.time).toBeGreaterThan(35);
+    expect(transitionAnchor.time).toBeLessThan(45);
   });
 
   it("detects multiple tempo changes across a track", () => {
-    const seg1 = constantBeatTimes(100, 80, 0);
-    const seg2 = constantBeatTimes(120, 80, seg1[seg1.length - 1] + 60 / 100);
-    const seg3 = constantBeatTimes(90, 80, seg2[seg2.length - 1] + 60 / 120);
-    const beats = [...seg1, ...seg2, ...seg3];
-
-    const anchors = detectTempoSegments(beats);
+    const env = multiTempoEnvelope([
+      { bpm: 120, durationSec: 24 },
+      { bpm: 150, durationSec: 24 },
+      { bpm: 75, durationSec: 24 },
+    ]);
+    const anchors = detectTempoSegments(env, FRAME_RATE);
     expect(anchors).not.toBeNull();
     expect(anchors.length).toBeGreaterThanOrEqual(3);
   });
 
   it("every returned anchor has finite time and bpm (never NaN/Infinity)", () => {
-    const seg1 = constantBeatTimes(100, 80, 0);
-    const seg2 = constantBeatTimes(150, 80, seg1[seg1.length - 1] + 60 / 100);
-    const anchors = detectTempoSegments([...seg1, ...seg2]);
+    const env = multiTempoEnvelope([
+      { bpm: 120, durationSec: 40 },
+      { bpm: 150, durationSec: 40 },
+    ]);
+    const anchors = detectTempoSegments(env, FRAME_RATE);
     for (const a of anchors) {
       expect(Number.isFinite(a.time)).toBe(true);
       expect(Number.isFinite(a.bpm)).toBe(true);
       expect(a.bpm).toBeGreaterThan(0);
     }
+  });
+
+  it("skips windows too quiet to estimate a tempo from, rather than guessing", () => {
+    // A window of near-silence sandwiched between real click-track segments
+    // — estimateTempoPeriod's energy<=0 guard should make that window
+    // contribute nothing, not throw or seed a bad anchor.
+    const clickSeg = syntheticClickBars(120, 24);
+    const silentSeg = new Array(WINDOW_FRAMES).fill({ bass: 0, mid: 0, high: 0, peak: 0 });
+    const bars = [...clickSeg, ...silentSeg, ...clickSeg];
+    const env = onsetEnvelope(bars);
+    expect(() => detectTempoSegments(env, FRAME_RATE)).not.toThrow();
+    const result = detectTempoSegments(env, FRAME_RATE);
+    if (result) {
+      for (const a of result) {
+        expect(Number.isFinite(a.time)).toBe(true);
+        expect(Number.isFinite(a.bpm)).toBe(true);
+      }
+    }
+  });
+});
+
+describe("smoothWindowedTempo — reject-then-corroborate", () => {
+  it("rejects a single-window spike with no corroboration, holds flat", () => {
+    const windows = [
+      { time: 0, bpm: 120 },
+      { time: 8, bpm: 130 }, // spike
+      { time: 16, bpm: 120 }, // back to baseline — does NOT corroborate the spike
+    ];
+    const smoothed = smoothWindowedTempo(windows);
+    expect(smoothed.map((w) => w.bpm)).toEqual([120, 120, 120]);
+  });
+
+  it("accepts a sustained change once the next window corroborates it", () => {
+    const windows = [
+      { time: 0, bpm: 120 },
+      { time: 8, bpm: 130 },
+      { time: 16, bpm: 130 }, // corroborates
+      { time: 24, bpm: 130 },
+    ];
+    const smoothed = smoothWindowedTempo(windows);
+    expect(smoothed.map((w) => w.bpm)).toEqual([120, 130, 130, 130]);
+  });
+
+  it("holds a trailing uncorroborated window flat (no next window to confirm it)", () => {
+    const windows = [
+      { time: 0, bpm: 120 },
+      { time: 8, bpm: 130 }, // last window, nothing after it to corroborate
+    ];
+    const smoothed = smoothWindowedTempo(windows);
+    expect(smoothed.map((w) => w.bpm)).toEqual([120, 120]);
+  });
+
+  it("rejects corroboration from a window too far away in time, despite matching bpm", () => {
+    // Gap between the candidate (8s) and its only "corroborating" reading
+    // (30s) is 22s > maxGapSec(16s) — too far apart in time to trust as the
+    // same drift event, even though the bpm values agree exactly.
+    const windows = [
+      { time: 0, bpm: 120 },
+      { time: 8, bpm: 130 },
+      { time: 30, bpm: 130 },
+    ];
+    const smoothed = smoothWindowedTempo(windows);
+    expect(smoothed[0].bpm).toBe(120);
+    expect(smoothed[1].bpm).toBe(120); // held flat — gap too large to corroborate
+  });
+
+  it("passes through empty/single-element input unchanged", () => {
+    expect(smoothWindowedTempo([])).toEqual([]);
+    expect(smoothWindowedTempo(null)).toEqual([]);
+    const single = [{ time: 0, bpm: 120 }];
+    expect(smoothWindowedTempo(single)).toEqual(single);
+  });
+});
+
+describe("findNearestOnsetPeak", () => {
+  it("finds a local peak within tolerance", () => {
+    const env = [0, 0.1, 0.2, 0.9, 0.2, 0.1, 0]; // peak at index 3
+    expect(findNearestOnsetPeak(env, 3, 2)).toBe(3);
+    expect(findNearestOnsetPeak(env, 2, 2)).toBe(3); // nearest peak from an offset target
+  });
+
+  it("returns -1 when nothing in range is a genuine local peak", () => {
+    const monotonic = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]; // strictly increasing — no local max anywhere
+    expect(findNearestOnsetPeak(monotonic, 3, 2)).toBe(-1);
+  });
+
+  it("returns -1 when the tolerance window doesn't reach any peak", () => {
+    const env = [0, 0, 0, 0.9, 0, 0, 0]; // peak at index 3, far from target
+    expect(findNearestOnsetPeak(env, 0, 1)).toBe(-1); // target 0, tolerance 1 -> range [0,1], never reaches index 3
+  });
+
+  it("picks the strongest peak when multiple exist in range", () => {
+    const env = [0, 0.5, 0.2, 0.9, 0.2, 0.5, 0]; // two local peaks: index 1 (0.5) and index 3 (0.9), index 5 also a peak (0.5, boundary)
+    expect(findNearestOnsetPeak(env, 3, 3)).toBe(3); // strongest wins, not just nearest
+  });
+
+  it("finds a genuine onset peak at frame 0 (no left neighbor to compare against)", () => {
+    const env = [0.9, 0.2, 0, 0, 0];
+    expect(findNearestOnsetPeak(env, 0, 1)).toBe(0);
+  });
+});
+
+describe("detectTempoSegments — invalid frameRate/windowSec must not hang", () => {
+  it("returns null instead of looping forever when frameRate is 0", () => {
+    const envelope = new Array(2000).fill(0.5);
+    expect(detectTempoSegments(envelope, 0)).toBeNull();
+  });
+
+  it("returns null instead of looping forever when frameRate is negative", () => {
+    const envelope = new Array(2000).fill(0.5);
+    expect(detectTempoSegments(envelope, -50)).toBeNull();
+  });
+
+  it("returns null instead of looping forever when opts.windowSec is 0", () => {
+    const envelope = new Array(2000).fill(0.5);
+    expect(detectTempoSegments(envelope, 50, { windowSec: 0 })).toBeNull();
   });
 });

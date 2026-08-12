@@ -221,7 +221,12 @@ export async function analyzeAudio(
   const arrayBuffer = await response.arrayBuffer();
 
   const audioContext = new AudioContext();
-  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+  let audioBuffer;
+  try {
+    audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+  } finally {
+    audioContext.close();
+  }
 
   const actualHighRes = barsPerSec
     ? Math.min(Math.ceil(audioBuffer.duration * barsPerSec), 250000)
@@ -467,10 +472,12 @@ export async function generateAndUploadWaveformV2(trackId, audioUrl, onProgress)
 
   const envelope = onsetEnvelope(bars);
   const detected = dpBeatTrack(envelope, { frameRate: BEAT_DETECTOR_FRAME_RATE });
-  // null when tempo is stable (the overwhelming majority of tracks) — callers
-  // must leave beat_grid_points unset in that case, not write a spurious
-  // single-anchor grid (see detectTempoSegments' header for why).
-  const tempoSegments = detectTempoSegments(detected.beatTimesSec);
+  // Runs on the raw envelope, not detected.beatTimesSec — dpBeatTrack's own
+  // beat times are too smoothed to show real drift. null when tempo is
+  // stable (the overwhelming majority of tracks) — callers must leave
+  // beat_grid_points unset in that case, not write a spurious single-anchor
+  // grid (see detectTempoSegments' header for why).
+  const tempoSegments = detectTempoSegments(envelope, BEAT_DETECTOR_FRAME_RATE);
 
   if (onProgress) onProgress(60);
 

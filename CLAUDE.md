@@ -92,7 +92,7 @@ If the answer is unclear, stop and reframe until it is.
 1. Read `tasks/lessons.md` — internalize recent corrections
 2. **SKIP `tasks/todo.md`** — stale Phase 9 artifact. Does not reflect current codebase. Ignore it.
 3. **SKIP `tasks/plan.active.md`** — stale Phase 9 artifact. Does not reflect current codebase. Ignore it.
-4. **Current state:** single console at `src/console/ArchitectConsole.jsx`. Both L and D use it; `viewer` prop controls feature differences. Branch is `main`. Cloudflare Pages deploys from main automatically.
+4. **Current state:** single console at `src/console/ArchitectConsole.jsx`. Both L and D use it; `viewer` prop controls feature differences. Branch is `main`. Cloudflare Pages is direct-upload only (not git-connected) — pushing to `main` does NOT deploy the frontend. Full deploy sequence: commit → push → `wrangler deploy` (worker, only if `worker/upload-worker.js` changed) → `npm run build` + `wrangler pages deploy dist --project-name psoulc` (Pages, only if frontend changed). Verify with `wrangler pages project list` if in doubt — do not infer from `env` output.
 5. **Read `DESIGN.md`** — all design decisions live here. Do not touch any CSS, JSX, or visual element without reading this first. If what you are about to do contradicts DESIGN.md, stop and say so.
 6. Apply the artist benefit check to the first task before touching any code
 7. Read NEXTSESSION, read TODO and ask if context-restore should be invoked before building a plan. 

@@ -2,6 +2,28 @@
 
 ---
 
+## Session: PR1 ship + deploy-mechanism confusion (2026-08-12)
+
+#### CLAUDE.md's "Pages deploys from main automatically" Is Wrong — Do Not Trust It
+
+- **Lesson**: Spent significant back-and-forth telling the user I "had no Cloudflare credentials" and couldn't deploy, based on `env | grep` finding nothing and CLAUDE.md's session-start checklist claiming Pages auto-deploys from git. Both were wrong. `CLOUDFLARE_API_TOKEN` is loaded from `/workspaces/psoulc/.env` (doesn't show in `env | grep` unless something has sourced it), and `npx wrangler pages project list` directly confirmed the `psoulc` project has `Git Provider: No` — it's direct-upload only, not git-connected.
+- **Rule**: Never trust CLAUDE.md's deploy-mechanism claim. The correct, verified sequence lives in this file and in memory (`feedback_deploy_sequence.md`): commit → push → `wrangler deploy` (worker, only if `worker/upload-worker.js` changed) → `npm run build` + `wrangler pages deploy dist --project-name psoulc` (Pages, only if frontend changed). Pushing to `main` alone does NOT deploy the frontend.
+- **How to apply**: Before ever claiming "I can't deploy" or assuming git-push-deploys, run `npx wrangler whoami` (checks real auth) and `npx wrangler pages project list` (checks git-connection mode) — don't infer from `env` or from CLAUDE.md text. **CLAUDE.md needs its session-start checklist item 4 corrected** — flagged for the next background-file audit pass, not yet fixed as of this entry.
+
+#### tasks/lessons.md Must Actually Be Read at Session Start — Not Skipped
+
+- **Lesson**: This exact deploy-mechanism confusion happened because `tasks/lessons.md` (which already had `feedback_deploy_sequence.md`'s equivalent content in memory, with the correct answer) was never read this session — `/context-restore` was invoked instead, which doesn't cover this file. The user caught it: "if you havent read the lessons we may need to review what we have been doing."
+- **Rule**: CLAUDE.md's Session Start Checklist item 1 ("Read tasks/lessons.md") is not optional and is not superseded by `/context-restore` or any other skill's own preamble. Read it explicitly, every session, regardless of what else runs first.
+- **How to apply**: At the start of any session touching this repo, read `tasks/lessons.md` in full (or at minimum grep it for terms relevant to the session's task) before making any claims about infra, deploy mechanism, or "what's already been tried."
+
+#### Codespace Commit Signing Can Fail with 403 "Author is invalid" — Not a Code Problem
+
+- **Lesson**: `git merge`/`git commit` failed with `gpg failed to sign the data... 403 | Author is invalid` from the Codespace's `gh-gpgsign` signing helper, despite `gh auth status` and git identity all checking out correctly. Root cause undetermined (likely a stale internal Codespace signing token, possibly related to a long-running session that survived a client disconnect/reconnect) — not a merge conflict, not a real identity mismatch.
+- **Rule**: If commit signing fails with this exact error pattern, it's an environment/infra issue, not a git-state or identity problem. Don't spend time re-checking `user.email`/`user.name`/`gh auth status` — they're not the cause.
+- **How to apply**: Confirm the failure is signing-specific (content merges cleanly, no conflict markers) then ask the user before bypassing with `--no-gpg-sign` (never bypass silently — see git safety rules). If it recurs, a Codespace restart is the next thing to try, not further git diagnosis.
+
+---
+
 ## CRITICAL: WAV Chunking in waveformAnalyzer.js — Never Remove (2026-06-30)
 
 **The rule:** Every waveform analysis path MUST go through `analyzeAudio()` in `src/lib/waveformAnalyzer.js`. Never call `response.arrayBuffer()` or `file.arrayBuffer()` directly on an audio URL for large files. D's mixes are 800MB–1GB+ WAVs. Full decode OOMs the browser.
@@ -23,6 +45,25 @@
 **What TO do:**
 - All waveform generation goes through `generateAndUploadWaveformV2()` → `analyzeAudio()` → chunked path for WAV.
 - The `analyzeAudio()` function has a warning comment. Read it before touching either function.
+
+---
+
+## CRITICAL: detectTempoSegments Must Run on the Raw Onset Envelope, Not dpBeatTrack's Beat Times — Never Revert (2026-08-12)
+
+**The rule:** `detectTempoSegments()` in `src/lib/beatDetector.js` takes `(envelope, frameRate, opts)` — the raw onset envelope — NOT `dpBeatTrack`'s smoothed `beatTimesSec` output. Do not "simplify" the signature back to beat times; that was the original bug, tried and reverted earlier the same day this fix landed.
+
+**Why:** `dpBeatTrack`'s DP tracker uses an `alpha=400` transition-cost penalty that forces beat spacing toward near-constant tempo. Feeding its own smoothed output back into drift detection averages real drift away before it can be measured — the detector could never see the thing it exists to find. The fix independently re-estimates tempo per fixed-duration window of the raw envelope, snaps each window's time anchor to the nearest genuine onset peak (`findNearestOnsetPeak`, mir_eval-grounded ±70ms / 17.5%-of-beat-period tolerance — a window with no peak in tolerance is skipped, not forced), and smooths estimates via reject-then-corroborate (`smoothWindowedTempo`) so one noisy window can never seed a spurious beatgrid anchor alone.
+
+**The history (so we never repeat it):**
+- `7133d8e` (2026-08-12): First attempt ran tempo-drift detection off `dpBeatTrack`'s own smoothed beat times.
+- `e75cab6` (2026-08-12): Reverted same day — wrong data source, real drift got averaged away.
+- `33a2890` (2026-08-12): Correct fix landed — envelope-based re-estimation + onset-snap + reject-then-corroborate smoothing.
+- `0dc2414` (2026-08-12, pre-ship review): Hardened further — guarded `windowFrames<=0` (previously spun forever) and fixed a frame-0 boundary bug in `findNearestOnsetPeak` that silently excluded a genuine onset at the very start of a window.
+
+**What NOT to do:**
+- Do not pass `dpBeatTrack(...).beatTimesSec` into `detectTempoSegments()` — that's the exact bug that was reverted.
+- Do not drop the onset-snap step and anchor on raw window boundaries — anchors will land on inaudible boundaries instead of real beats.
+- Do not skip `smoothWindowedTempo` — without it a single noisy window can seed a spurious beatgrid anchor.
 
 ---
 
