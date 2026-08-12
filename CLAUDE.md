@@ -132,6 +132,25 @@ Key routing rules:
 - Save progress, checkpoint, resume → invoke checkpoint
 - Code quality, health check → invoke health
 
+## Deploy Configuration (configured by /setup-deploy)
+- Platform: Cloudflare Pages (project `psoulc`, **direct-upload only — not git-connected**) + separate Cloudflare Worker (`psc-upload-worker`)
+- Production URL: https://uoyni.com (also `www.uoyni.com`, `psoulc.pages.dev`)
+- Worker URL: https://psc-upload-worker.psoulc.workers.dev
+- Deploy workflow: none — pushing to `main` does NOT trigger a deploy. Deploys are manual via `wrangler`.
+- Deploy status command: `npx wrangler pages deployment list --project-name psoulc` (frontend) / `npx wrangler deployments list --name psc-upload-worker` from `worker/` (backend)
+- Merge method: merge commit (`gh pr merge --merge`, matches existing history — PRs #1, #4, #5 all merged this way, not squash/rebase)
+- Project type: web app (Vite/React frontend) + Cloudflare Worker API (D1 + R2 backed)
+- Post-deploy health check: `curl -sf https://uoyni.com` (expect 200) and `curl -sf https://psc-upload-worker.psoulc.workers.dev/health` (expect `{"ok":true,"db":true,"r2_url":true}`)
+
+### Custom deploy hooks
+- Pre-merge: `npm run preflight` (runs `check:design` + `check:pr` + `build`); CI (`.github/workflows/ci.yml`) also runs `npm test` and Playwright e2e smoke on push to `main` and on PRs
+- Deploy trigger (run only the steps needed for what changed):
+  1. `git push`
+  2. If `worker/upload-worker.js` (or anything under `worker/`) changed: `cd worker && npx wrangler deploy` — requires `CLOUDFLARE_API_TOKEN` exported into the shell; it lives in root `.env` but is **not** auto-loaded when `cwd` is `worker/`, so export it manually first (`export CLOUDFLARE_API_TOKEN=$(grep -m1 CLOUDFLARE_API_TOKEN .env | cut -d= -f2-)`) or run from repo root
+  3. If frontend changed: `npm run build && npx wrangler pages deploy dist --project-name psoulc`
+- Deploy status: `npx wrangler pages deployment list --project-name psoulc` (do not infer deploy state from `env` output or from git push alone — confirmed direct-upload via `npx wrangler pages project list` showing `Git Provider: No`)
+- Health check: see Post-deploy health check above
+
 ## GBrain Configuration (configured by /setup-gbrain)
 - Mode: local-stdio
 - Engine: pglite
