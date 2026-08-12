@@ -418,3 +418,9 @@ Captures patterns, mistakes, and corrections to prevent "Shadow Gaps" from repea
 - **Rule**: Any time the scale range differs from the reference, document why and have the answer ready. "We show 3 extra dB of headroom visibility" is a feature explanation, not a bug apology.
 - **How to apply**: If asked about 0 VU position — "Standard meter stops at +3 VU. We go to +6 so D sees hot signals earlier before the LED clips. That extra range pulls 0 to center."
 - **How to apply**: After any async operation that changes data, verify the data actually changed (check D1/R2 for the expected record before declaring success).
+
+#### `check-design-law.sh` False-Positives on "Chakra Petch" Font Name
+
+- **Lesson**: `npm run preflight` fails at `check:design` with "banned space-themed display language found" flagging `fontFamily: "'Chakra Petch', monospace"` — a legitimate Google Font used throughout the console (`useAudioAnalyzer.js`, `DeckWaveform.jsx`, `DeckWaveformV2.jsx`). Confirmed pre-existing on `main` via `git show main:<file> | grep` (no working-tree checkout needed) — not introduced by any recent branch.
+- **Rule**: This is a checker bug (substring match on "chakra" catching the font name, not actual banned chakra/cosmic design language), not a real design-law violation. Don't try to "fix" it by renaming the font or touching unrelated files on an unrelated branch.
+- **How to apply**: If `check:design` fails only on "Chakra Petch" font declarations, treat as a known false positive — safe to proceed. If the script needs an actual fix (narrow the banned-word regex to exclude font-family string literals), that's separate scope from whatever branch surfaced it.
