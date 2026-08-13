@@ -10,6 +10,7 @@ const PEAK_TICK   = "rgba(240,237,232,0.85)";
 const SPEC_N      = 150;
 const FLOOR_PCT   = 0.06; // minimum bar height as fraction of canvas height
 const BPM_BUF_SIZE = 240; // 4 seconds × ~60 Hz rAF rate
+const BPM_BASS_CUTOFF_HZ = 860; // matches the original fixed 40-bin cutoff at fftSize=2048 (44.1kHz: 40 * 22050/1024 ≈ 861Hz)
 
 // VU meter scale: 0 VU = -18 dBFS (SMPTE standard). Single source of truth —
 // both the live rAF loop (needle normalization) and drawVuNeedle() (arc geometry
@@ -34,28 +35,49 @@ export function amplitudeTodBFS(value, floor = -60) {
   return Math.max(floor, dbfs);
 }
 
-// Maps frequency position + amplitude to 3-band RGB color (PSC original, screen-blend aesthetic).
-// freqT: 0 = bass (red), 0.5 = mid (green), 1.0 = high (cyan).
+// Maps frequency position + amplitude to 5-band RGB color, Bark critical-band boundaries
+// (Zwicker & Terhardt 1980) — the ear's frequency-*resolution* scale, not octave/pitch
+// spacing. Boundaries below are Hz values 20/534/1230/2579/5927/18000 converted through
+// this file's own log-bar-position formula (freqT = i/(SPEC_N-1)). Call sites use
+// i/(SPEC_N-1) while the bin-selection math below uses i/SPEC_N — a pre-existing,
+// sub-perceptible (<1 bar of 150) axis mismatch, not introduced here; not worth
+// realigning unless SPEC_N or the boundaries get tightened further. See
+// /plan-design-review 2026-08-12 ("DECIDED — SA 5-band color scheme, Bark critical-band
+// boundaries") for the full derivation, palette revisions, and colorblind verification.
+// freqT: 0-1 position along the log-spaced 20Hz-18kHz bar axis.
 // normH: 0-1 amplitude — scales opacity; brighter = louder.
-// bass=RED #ff0000, mid=GREEN #00ff00, high=CYAN #00ffff — matches DeckWaveformV2 waveform bands.
 // Exported for unit testing.
+export const BAND_LOW_MIDLOW_T   = 0.482869; // 534Hz
+export const BAND_MIDLOW_MID_T   = 0.605528; // 1230Hz
+export const BAND_MID_MIDHIGH_T  = 0.714370; // 2579Hz
+export const BAND_MIDHIGH_HIGH_T = 0.836697; // 5927Hz
+
 export function specBarColor(normH, freqT, alpha = 1) {
-  // 3-band RGB model (PSC forward-thinking)
   let r, g, b;
-  if (freqT < 0.33) {
-    // Bass: red
+  if (freqT < BAND_LOW_MIDLOW_T) {
+    // Low: red (unchanged anchor)
     r = 255;
     g = 0;
     b = 0;
-  } else if (freqT < 0.67) {
-    // Mid: green
+  } else if (freqT < BAND_MIDLOW_MID_T) {
+    // Mid-low: red-orange #ff5500 (deuteranopia-safety revision — see plan doc)
+    r = 255;
+    g = 85;
+    b = 0;
+  } else if (freqT < BAND_MID_MIDHIGH_T) {
+    // Mid: green (unchanged anchor)
     r = 0;
     g = 255;
     b = 0;
-  } else {
-    // High: cyan
+  } else if (freqT < BAND_MIDHIGH_HIGH_T) {
+    // Mid-high: cyan #00ffff (moved down from the old 3-band High anchor)
     r = 0;
     g = 255;
+    b = 255;
+  } else {
+    // High: indigo #6600ff (ROYGBIV-correct top anchor, not an interpolated hue)
+    r = 102;
+    g = 0;
     b = 255;
   }
   // Amplitude modulates opacity: low amp = dim, high amp = bright
@@ -142,7 +164,7 @@ export default function useAudioAnalyzer({ isPlaying, waveformData, currentTime,
 
       const source   = audioCtx.createMediaElementSource(audioEl);
       const analyser = audioCtx.createAnalyser();
-      analyser.fftSize               = 2048; // 1024 frequency bins
+      analyser.fftSize               = 4096; // 2048 frequency bins — halves duplicate-bar count in sub-150Hz SA bars vs. 2048
       analyser.smoothingTimeConstant = 0.75;
 
       // Phase correlation: split stereo into L/R channels for mono compatibility detection
@@ -421,7 +443,13 @@ export default function useAudioAnalyzer({ isPlaying, waveformData, currentTime,
 
         // BPM ring: write bass-bin RMS each frame; detect every 30 frames (~500ms)
         if (freqBins) {
-          const bassEnd = Math.min(40, freqBins.length);
+          // Hz-stable bass window — a fixed bin count would silently narrow this
+          // range whenever fftSize/frequencyBinCount changes (see BPM_BASS_CUTOFF_HZ).
+          const nyquistHz = audioCtxRef.current.sampleRate / 2;
+          const bassEnd = Math.min(
+            Math.max(1, Math.round((BPM_BASS_CUTOFF_HZ / nyquistHz) * freqBins.length)),
+            freqBins.length,
+          );
           let bassSum = 0;
           for (let i = 0; i < bassEnd; i++) bassSum += freqBins[i];
           const bassRms = bassSum / (bassEnd * 255);
@@ -457,17 +485,21 @@ export default function useAudioAnalyzer({ isPlaying, waveformData, currentTime,
         const FLOOR    = Math.round(H * FLOOR_PCT);
 
         if (freqBins) {
-          // Live FFT path: map 1024 frequency bins to SPEC_N bars using logarithmic frequency spacing
+          // Live FFT path: map frequencyBinCount bins to SPEC_N bars using logarithmic frequency spacing
           // Human hearing is logarithmic: 20Hz–18kHz should occupy bars evenly in perceived frequency
           const MIN_FREQ = 20;    // Hz — bottom of human hearing
           const MAX_FREQ = 18000; // Hz — top of useful music range (below Nyquist for 44.1kHz)
-          const nyquist  = 44100 / 2;
+          const nyquist  = audioCtxRef.current.sampleRate / 2;
           const totalBins = freqBins.length;
           for (let i = 0; i < SPEC_N; i++) {
             // Log-spaced frequency edges for this bar
             const freqLo = MIN_FREQ * Math.pow(MAX_FREQ / MIN_FREQ, i / SPEC_N);
             const freqHi = MIN_FREQ * Math.pow(MAX_FREQ / MIN_FREQ, (i + 1) / SPEC_N);
-            const binStart = Math.max(0, Math.floor(freqLo / nyquist * totalBins));
+            // Symmetric clamp — a fixed 44.1kHz nyquist used to make binStart's
+            // upper bound a no-op (freqLo could never exceed it); now that nyquist
+            // reads the live sampleRate, a device under ~36kHz needs this clamp or
+            // the top bars silently go dead (binStart > binEnd, sum stays 0).
+            const binStart = Math.min(totalBins, Math.max(0, Math.floor(freqLo / nyquist * totalBins)));
             const binEnd   = Math.min(totalBins, Math.ceil(freqHi / nyquist * totalBins));
             let sum = 0;
             for (let b = binStart; b < binEnd; b++) sum += freqBins[b];

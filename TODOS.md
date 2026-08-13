@@ -180,6 +180,21 @@ may differ.
 
 ---
 
+### BPM ring's detectBpm() assumes a fixed 60Hz rAF sample rate
+
+**Priority:** Medium
+**Blocked by:** Nothing — pre-existing, independent of the SA 5-band ship.
+
+**What:** `useAudioAnalyzer.js`'s BPM ring fills `bpmBufferRef` once per `requestAnimationFrame` callback and calls `detectBpm(bpmBufferRef.current, 60)` with a hardcoded `sampleRate=60`. `requestAnimationFrame` actually fires at the display's real refresh rate — 90Hz/120Hz/144Hz monitors are common. On those displays the ring buffer fills 1.5-2.4x faster than the function assumes, which skews `detectBpm`'s autocorrelation lag-to-BPM conversion and produces systematically wrong BPM readings. The "every 30 frames ~500ms" detection-cadence comment on the same block is also wrong on faster displays (actually ~250-330ms at 90-120Hz).
+
+**Why:** Surfaced by adversarial review during the SA 5-band color / Nyquist-fix branch (2026-08-12) — same "hardcoded temporal-rate constant" bug family as the Nyquist fix in that branch, but `detectBpm`/`BPM_BUF_SIZE` themselves were untouched by that diff, so it was logged here rather than folded in.
+
+**Context:** Fix likely involves measuring actual rAF-callback delta time (already computed elsewhere in the file for the EMA dt clamp — see `lastFrameTimeRef`) and passing a real, live sample rate to `detectBpm` instead of the hardcoded `60`.
+
+**Depends on:** Nothing technical.
+
+---
+
 ### CI has been red on main since at least 2026-07-28 — two separate causes, one fixed
 
 **Priority:** Medium
