@@ -180,6 +180,24 @@ may differ.
 
 ---
 
+### CI has been red on main since at least 2026-07-28 — two separate causes, one fixed
+
+**Priority:** Medium
+**Blocked by:** Nothing.
+
+**What:** `/land-and-deploy`'s CI gate (first time this project actually checked CI status before merging, rather than merging through the GitHub UI/CLI regardless) surfaced that CI has been failing on every push to `main` since at least 2026-07-28 — PRs #4 and #5 both merged with CI already red at merge time (confirmed via `gh run list` timestamps 2-3s after each merge commit). Two distinct causes:
+
+1. `react`/`react-dom` version mismatch (**fixed**, see the "CI has been red" fix commit / PR #9) — `npm ci`'s strict lockfile replay hit a genuine version mismatch that a long-lived local `node_modules` was masking.
+2. `tests/e2e/beatgrid.spec.js` — 4 of 9 e2e-smoke tests fail on a timing issue, most likely related to `fixtures/auth.js`'s login wait, which its own code comment already documents as "an intermittent flake independent of the app itself." Confirmed the actual app logic (`ArchitectConsole.jsx` confidence-badge rendering, ~line 3460) is correct against the fixture data (`detected_bpm: 176`, `confidence: 0.32 < 0.6` threshold) — this is very likely a CI-runner timing/flake issue (5000ms Playwright timeout), not a real regression. Not fixed — landed PR #9 past it via `gh pr merge --admin` since it's unrelated to that PR's content (package.json/package-lock.json only).
+
+**Why:** Neither cause is caused by any of today's PRs (#6/#7/#8/#9) — both predate this session by at least 2 weeks. Worth fixing so CI is actually trustworthy going forward, since branch protection isn't configured to strictly require these checks (mergeStateStatus was `UNSTABLE`, not `BLOCKED`), meaning broken CI has been silently non-blocking this whole time.
+
+**Context:** For #2, the fix is likely either raising the Playwright assertion timeout on this specific page, or adding an explicit `waitForLoadState`/network-idle wait after `mockTracksApi(page)` + `loginToConsole(page)` before asserting on rendered content, rather than relying on the default 5s `toHaveText` timeout. Should be re-tested with several repeated CI runs (not just one) before considering it actually fixed, since flaky failures don't reproduce every time.
+
+**Depends on:** Nothing technical.
+
+---
+
 ## Completed
 
 ### AudioContext leak + unthrottled waveform generation on upload
