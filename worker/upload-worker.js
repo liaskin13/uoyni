@@ -240,8 +240,15 @@ export default {
 
       // GET /tracks
       if (request.method === "GET" && url.pathname === "/tracks") {
+        // Same auth/publish gating as GET /tracks/:vault — detected_bpm/beat_grid_points
+        // are D's internal production metadata (console-only, never guest-facing), and
+        // unpublished tracks must never be listed for unauthenticated callers.
+        const publishClause = isAuthenticated ? "" : " AND is_published = 1";
+        const dspColumns = isAuthenticated
+          ? ", detected_bpm, detected_beat_offset, detected_bpm_confidence, beat_grid_points, detected_downbeat_offset, detected_downbeat_confidence"
+          : "";
         const { results } = await env.PSC_DB.prepare(
-          "SELECT id, vault, title, artist, bpm, bpm_display, musical_key, duration, audio_path, waveform_data, detected_bpm, detected_beat_offset, detected_bpm_confidence, beat_grid_points, detected_downbeat_offset, detected_downbeat_confidence, created_at, is_published FROM tracks WHERE is_voided = 0 ORDER BY created_at DESC",
+          `SELECT id, vault, title, artist, bpm, bpm_display, musical_key, duration, audio_path, waveform_data${dspColumns}, created_at, is_published FROM tracks WHERE is_voided = 0${publishClause} ORDER BY created_at DESC`,
         ).all();
 
         return new Response(JSON.stringify(results), {
