@@ -8,7 +8,13 @@
 //   proxy: GET /tracks/:id/waveform-bin            → worker endpoint (CORS-safe, no direct R2)
 
 import { UPLOAD_WORKER_URL, UPLOAD_SECRET } from "../config";
-import { onsetEnvelope, dpBeatTrack, detectTempoSegments } from "./beatDetector";
+import {
+  onsetEnvelope,
+  dpBeatTrack,
+  detectTempoSegments,
+  detectDownbeatPhase,
+  synthesizeSegmentBeatGrid,
+} from "./beatDetector";
 
 // Sentinel value stored in D1 waveform_data when a track has V2 binary assets in R2.
 // Use this constant everywhere — never compare against the string literal 'v2'.
@@ -455,6 +461,49 @@ export async function uploadWaveformAssets(trackId, binaryBytes, pngBlob, onProg
 const BEAT_DETECTOR_FRAME_RATE = 50; // must match the barsPerSec passed to analyzeAudio below
 
 /**
+ * Extracted for unit testing (matches this codebase's established pattern —
+ * resolveBpmAtTime, resolveDownbeatOffsetForQuantize — of pulling pure logic
+ * out of I/O-heavy orchestration functions). Pure: no fetch, no AudioContext,
+ * no canvas — just the branching in front of detectDownbeatPhase.
+ *
+ * Downbeat detection (PR2 Item 5) reuses whatever anchor granularity
+ * tempoSegments already produced, no new parallel segmentation. Flat tempo
+ * (the overwhelming majority of tracks) is exactly the regime where
+ * dpBeatTrack's constant-spacing assumption holds, so its own beatTimesSec is
+ * used directly. When drift is present, each anchor gets its own synthesized
+ * local beat grid (synthesizeSegmentBeatGrid) so the downbeat phase is
+ * detected against that segment's actual tempo, not a blended one.
+ *
+ * @returns {{detectedDownbeatOffset: number|null, detectedDownbeatConfidence: number|null, tempoSegmentsWithDownbeat: object[]|null}}
+ */
+export function computeDownbeatData(bars, detected, tempoSegments, duration, frameRate = BEAT_DETECTOR_FRAME_RATE) {
+  if (!tempoSegments) {
+    const downbeat = detectDownbeatPhase(bars, detected.beatTimesSec, { frameRate });
+    return {
+      detectedDownbeatOffset: downbeat?.downbeatOffset ?? null,
+      detectedDownbeatConfidence: downbeat?.downbeatConfidence ?? null,
+      tempoSegmentsWithDownbeat: tempoSegments,
+    };
+  }
+
+  // detectedDownbeatOffset/Confidence stay null here — that data lives on the
+  // anchors instead. Both top-level keys are still always present (even as
+  // null) so the worker's `!== undefined` PATCH guard correctly clears stale
+  // values on a track that flips between flat/drift-segmented between
+  // Regenerates.
+  const tempoSegmentsWithDownbeat = tempoSegments.map((anchor, i) => {
+    const segmentEnd = tempoSegments[i + 1]?.time ?? duration;
+    const grid = synthesizeSegmentBeatGrid(anchor.time, anchor.bpm, segmentEnd);
+    const downbeat = detectDownbeatPhase(bars, grid, { frameRate });
+    return downbeat
+      ? { ...anchor, downbeatOffset: downbeat.downbeatOffset, downbeatConfidence: downbeat.downbeatConfidence }
+      : anchor;
+  });
+
+  return { detectedDownbeatOffset: null, detectedDownbeatConfidence: null, tempoSegmentsWithDownbeat };
+}
+
+/**
  * Full v2 waveform generation: analyze audio, pack to binary, render PNG, upload both to R2.
  * Returns the bars array so callers can use it immediately without re-fetching from R2.
  *
@@ -479,6 +528,9 @@ export async function generateAndUploadWaveformV2(trackId, audioUrl, onProgress)
   // grid (see detectTempoSegments' header for why).
   const tempoSegments = detectTempoSegments(envelope, BEAT_DETECTOR_FRAME_RATE);
 
+  const { detectedDownbeatOffset, detectedDownbeatConfidence, tempoSegmentsWithDownbeat } =
+    computeDownbeatData(bars, detected, tempoSegments, duration);
+
   if (onProgress) onProgress(60);
 
   const binaryBytes = packToBinary(bars);
@@ -498,6 +550,8 @@ export async function generateAndUploadWaveformV2(trackId, audioUrl, onProgress)
     detectedBpm: detected.bpm,
     detectedBeatOffset: detected.beatOffsetSec,
     detectedBpmConfidence: detected.confidence,
-    tempoSegments,
+    tempoSegments: tempoSegmentsWithDownbeat,
+    detectedDownbeatOffset,
+    detectedDownbeatConfidence,
   };
 }

@@ -62,6 +62,28 @@ export function syntheticGenreBars({
   return { bars, actualBpm, stepFrames };
 }
 
+// Builds bars + beatTimesSec for a fixed-tempo click track where bass energy
+// is strong only in a 120ms window after beats at `downbeatPhase` (mod 4),
+// and near-floor elsewhere — isolates PR2 Item 5's downbeat-phase-detection
+// decision from tempo estimation entirely (beat times are given directly,
+// not derived from dpBeatTrack). Shared by beatDetector.test.js and
+// waveformAnalyzer.test.js — same reuse rationale as syntheticGenreBars above.
+const DOWNBEAT_WINDOW_MS = 120; // must match beatDetector.js's BASS_WINDOW_MS
+
+export function phaseWeightedBars({ bpm = 120, numBeats, downbeatPhase, strongBass = 1.0, weakBass = 0.02 }) {
+  const beatPeriodSec = 60 / bpm;
+  const beatTimesSec = Array.from({ length: numBeats }, (_, i) => i * beatPeriodSec);
+  const totalFrames = Math.round((numBeats + 1) * beatPeriodSec * FRAME_RATE);
+  const windowFrames = Math.round((DOWNBEAT_WINDOW_MS / 1000) * FRAME_RATE);
+  const bars = Array.from({ length: totalFrames }, () => ({ bass: weakBass }));
+  beatTimesSec.forEach((t, i) => {
+    if (i % 4 !== downbeatPhase) return;
+    const start = Math.round(t * FRAME_RATE);
+    for (let f = start; f < Math.min(bars.length, start + windowFrames); f++) bars[f].bass = strongBass;
+  });
+  return { bars, beatTimesSec };
+}
+
 // 5 archetypes, each a { bpm, durationSec, bassPattern, midPattern, highPattern }
 // spec ready to pass straight into syntheticGenreBars(). Only breakbeat is
 // expected to land on a half-tempo octave rather than an exact match — see

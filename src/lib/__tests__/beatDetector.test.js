@@ -5,7 +5,10 @@ import {
   detectTempoSegments,
   smoothWindowedTempo,
   findNearestOnsetPeak,
+  detectDownbeatPhase,
+  synthesizeSegmentBeatGrid,
 } from "../beatDetector";
+import { syntheticGenreBars, GENRE_ARCHETYPES, phaseWeightedBars } from "./genreFixtures";
 
 const FRAME_RATE = 50;
 const DRIFT_WINDOW_SEC = 8;
@@ -339,5 +342,141 @@ describe("detectTempoSegments — invalid frameRate/windowSec must not hang", ()
   it("returns null instead of looping forever when opts.windowSec is 0", () => {
     const envelope = new Array(2000).fill(0.5);
     expect(detectTempoSegments(envelope, 50, { windowSec: 0 })).toBeNull();
+  });
+});
+
+describe("detectDownbeatPhase", () => {
+  it("finds the correct phase and reports high confidence when bass strongly favors one phase", () => {
+    const { bars, beatTimesSec } = phaseWeightedBars({ bpm: 120, numBeats: 12, downbeatPhase: 2 });
+    const result = detectDownbeatPhase(bars, beatTimesSec);
+    expect(result).not.toBeNull();
+    expect(result.downbeatOffset).toBeCloseTo(beatTimesSec[2], 5);
+    expect(result.downbeatConfidence).toBeGreaterThan(0.5);
+  });
+
+  it("returns null when bass energy is flat across all phases (no real signal)", () => {
+    const beatTimesSec = Array.from({ length: 12 }, (_, i) => i * 0.5);
+    const bars = Array.from({ length: 400 }, () => ({ bass: 0.3 })); // uniform, no phase preference
+    expect(detectDownbeatPhase(bars, beatTimesSec)).toBeNull();
+  });
+
+  it("returns null with fewer than MIN_DOWNBEAT_BEATS (8) beat instants", () => {
+    const { bars, beatTimesSec } = phaseWeightedBars({ bpm: 120, numBeats: 6, downbeatPhase: 0 });
+    expect(detectDownbeatPhase(bars, beatTimesSec)).toBeNull();
+  });
+
+  it("returns null for missing/empty bars or beatTimesSec without throwing", () => {
+    expect(detectDownbeatPhase(null, [1, 2, 3])).toBeNull();
+    expect(detectDownbeatPhase([], [1, 2, 3])).toBeNull();
+    expect(detectDownbeatPhase([{ bass: 1 }], null)).toBeNull();
+  });
+
+  it("treats maximal contrast (winning phase has energy, others are exactly zero) as a pass, not a divide-by-zero", () => {
+    // weakBass=0 (not the usual 0.02 floor) drives the three non-winning
+    // phases' average to exactly 0 — the otherAvg<=0 branch specifically.
+    const { bars, beatTimesSec } = phaseWeightedBars({
+      bpm: 120,
+      numBeats: 12,
+      downbeatPhase: 3,
+      weakBass: 0,
+    });
+    const result = detectDownbeatPhase(bars, beatTimesSec);
+    expect(result).not.toBeNull();
+    expect(result.downbeatOffset).toBeCloseTo(beatTimesSec[3], 5);
+    expect(result.downbeatConfidence).toBe(1); // maximal — winner has all the energy
+  });
+
+  it("returns null (not a false guess) when every phase has exactly zero bass energy", () => {
+    // otherAvg<=0 AND phaseAvg[bestPhase]<=0 — the "nothing to detect" arm.
+    const beatTimesSec = Array.from({ length: 12 }, (_, i) => i * 0.5);
+    const silentBars = Array.from({ length: 400 }, () => ({ bass: 0 }));
+    expect(detectDownbeatPhase(silentBars, beatTimesSec)).toBeNull();
+  });
+
+  it("skips a beat instant whose analysis window falls entirely past the end of the bars array", () => {
+    // 12 beats at 0.5s/beat = 6s, but bars only cover 4s (200 frames at 50fps)
+    // — the last 4 beat instants land past bars.length and must be skipped
+    // via the bounds guard's `continue`, not throw or corrupt the other
+    // phases' averages. Phase 2 still wins among the beats that DO land
+    // in-bounds.
+    const { bars: fullBars, beatTimesSec } = phaseWeightedBars({
+      bpm: 120,
+      numBeats: 12,
+      downbeatPhase: 2,
+    });
+    const truncatedBars = fullBars.slice(0, 200);
+    expect(() => detectDownbeatPhase(truncatedBars, beatTimesSec)).not.toThrow();
+    const result = detectDownbeatPhase(truncatedBars, beatTimesSec);
+    expect(result).not.toBeNull();
+    expect(result.downbeatOffset).toBeCloseTo(beatTimesSec[2], 5);
+  });
+
+  it("four-on-the-floor house (equal kick energy on every beat) correctly returns null, not a wrong guess", () => {
+    // This is the exact designed-for safe outcome the CEO review required be
+    // verified, not assumed — house's kick hits every beat equally, so no
+    // phase should ever win a >=15% contrast, per the same bars-generator
+    // used by the multi-genre validation suite (genreFixtures.js).
+    const { bars, actualBpm } = syntheticGenreBars(GENRE_ARCHETYPES.house);
+    const env = onsetEnvelope(bars);
+    const detected = dpBeatTrack(env, { frameRate: FRAME_RATE });
+    expect(detected.bpm).not.toBeNull();
+    expect(detected.beatTimesSec.length).toBeGreaterThanOrEqual(8);
+    const result = detectDownbeatPhase(bars, detected.beatTimesSec, { frameRate: FRAME_RATE });
+    expect(result).toBeNull();
+    // sanity check this isn't null merely because tempo detection failed —
+    // house should still read close to its actual (possibly octave-related) bpm
+    const ratio = detected.bpm / actualBpm;
+    const isPlausibleOctave = [0.5, 1, 2].some((m) => Math.abs(ratio - m) < 0.05);
+    expect(isPlausibleOctave).toBe(true);
+  });
+});
+
+describe("synthesizeSegmentBeatGrid", () => {
+  it("produces the correct beat count and spacing for a given (start, bpm, end)", () => {
+    const grid = synthesizeSegmentBeatGrid(0, 120, 4); // 0.5s/beat, 4s span -> 8 beats
+    expect(grid.length).toBe(8);
+    expect(grid[0]).toBe(0);
+    for (let i = 1; i < grid.length; i++) {
+      expect(grid[i] - grid[i - 1]).toBeCloseTo(0.5, 10);
+    }
+  });
+
+  it("offsets a non-zero start time correctly", () => {
+    const grid = synthesizeSegmentBeatGrid(10, 150, 12); // 0.4s/beat, start at 10s, span to 12s -> 5 beats
+    expect(grid[0]).toBe(10);
+    expect(grid.length).toBe(5);
+    expect(grid[grid.length - 1]).toBeCloseTo(11.6, 5);
+  });
+
+  it("returns an empty array for degenerate input (bad bpm, end <= start)", () => {
+    expect(synthesizeSegmentBeatGrid(0, 0, 10)).toEqual([]);
+    expect(synthesizeSegmentBeatGrid(0, -120, 10)).toEqual([]);
+    expect(synthesizeSegmentBeatGrid(10, 120, 10)).toEqual([]);
+    expect(synthesizeSegmentBeatGrid(10, 120, 5)).toEqual([]);
+  });
+
+  it("a segment too short for MIN_DOWNBEAT_BEATS produces a grid detectDownbeatPhase correctly declines", () => {
+    // 120 BPM = 0.5s/beat; a 2-second segment yields only 4 beats, under the
+    // 8-beat floor — feeding this synthesized grid to detectDownbeatPhase
+    // must return null regardless of what the bars data looks like.
+    const grid = synthesizeSegmentBeatGrid(0, 120, 2);
+    expect(grid.length).toBeLessThan(8);
+    const bars = Array.from({ length: 200 }, () => ({ bass: 1 })); // strong everywhere — would pass the contrast gate if length weren't checked first
+    expect(detectDownbeatPhase(bars, grid)).toBeNull();
+  });
+
+  it("detectDownbeatPhase finds the correct phase on a synthesized (segment) grid, same as a direct grid", () => {
+    const grid = synthesizeSegmentBeatGrid(0, 120, 6); // 0.5s/beat, 6s span -> 12 beats
+    const windowFrames = Math.round((120 / 1000) * FRAME_RATE);
+    const totalFrames = Math.round(6 * FRAME_RATE) + windowFrames;
+    const bars = Array.from({ length: totalFrames }, () => ({ bass: 0.02 }));
+    grid.forEach((t, i) => {
+      if (i % 4 !== 1) return; // downbeat at phase 1 this time
+      const start = Math.round(t * FRAME_RATE);
+      for (let f = start; f < Math.min(bars.length, start + windowFrames); f++) bars[f].bass = 1.0;
+    });
+    const result = detectDownbeatPhase(bars, grid);
+    expect(result).not.toBeNull();
+    expect(result.downbeatOffset).toBeCloseTo(grid[1], 5);
   });
 });
