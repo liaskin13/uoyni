@@ -117,11 +117,13 @@ function GodModeMobile({ owner, onPowerDown, onBrowseVault }) {
   return (
     <div className="gmm-root">
       <div className="gmm-header">
-        <span className="gmm-header-label">Access Codes</span>
-        <div className="gmm-header-right">
+        <div className="gmm-header-row">
+          <span className="gmm-header-label">Access Codes</span>
           <span className="gmm-owner-badge">
             {owner === "D" ? "D · GOD MODE" : "L · GOD MODE PLUS"}
           </span>
+        </div>
+        <div className="gmm-header-row gmm-header-actions">
           {onBrowseVault && (
             <button
               className="gmm-exit-btn"
