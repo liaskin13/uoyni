@@ -242,6 +242,18 @@ describe("computeDownbeatData", () => {
       expect(result.detectedDownbeatOffset).toBeNull();
       expect(result.detectedDownbeatConfidence).toBeNull();
     });
+
+    it("treats an empty tempoSegments array the same as null (flat-tempo branch, not an empty drift map)", () => {
+      // Defensive: !tempoSegments alone doesn't catch a truthy-but-empty [],
+      // which would otherwise fall into the drift branch and persist a
+      // truthy-but-empty tempoSegmentsWithDownbeat, contradicting the
+      // documented "leave beat_grid_points unset" contract.
+      const { bars, beatTimesSec } = phaseWeightedBars({ numBeats: 12, downbeatPhase: 1 });
+      const detected = { beatTimesSec };
+      const result = computeDownbeatData(bars, detected, [], 6);
+      expect(result.tempoSegmentsWithDownbeat).toEqual([]);
+      expect(result.detectedDownbeatOffset).toBeCloseTo(beatTimesSec[1], 5);
+    });
   });
 
   describe("drift present (tempoSegments is an anchor array)", () => {

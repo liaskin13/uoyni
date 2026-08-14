@@ -477,7 +477,7 @@ const BEAT_DETECTOR_FRAME_RATE = 50; // must match the barsPerSec passed to anal
  * @returns {{detectedDownbeatOffset: number|null, detectedDownbeatConfidence: number|null, tempoSegmentsWithDownbeat: object[]|null}}
  */
 export function computeDownbeatData(bars, detected, tempoSegments, duration, frameRate = BEAT_DETECTOR_FRAME_RATE) {
-  if (!tempoSegments) {
+  if (!tempoSegments || tempoSegments.length === 0) {
     const downbeat = detectDownbeatPhase(bars, detected.beatTimesSec, { frameRate });
     return {
       detectedDownbeatOffset: downbeat?.downbeatOffset ?? null,
