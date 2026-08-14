@@ -2,6 +2,40 @@
 
 All notable changes to Pleasant Soul Collective will be documented in this file.
 
+## [1.3.0.0] - 2026-08-14
+
+### Added
+
+- **GOD MODE MOBILE** — D and L can now generate, list, and revoke access
+  codes from their phones. A new, narrow `tier === "A" && isMobile` route
+  (not the console made responsive — a named, scoped exception to
+  DESIGN.md's console-desktop-only rule), with a QR code rendered next to
+  each generated code so a guest can scan and auto-join with zero typing
+- Single-device binding on `POST /redeem` — once a code is claimed by one
+  device, a different device attempting the same code is rejected (409
+  "ALREADY CLAIMED"), instead of codes being freely shareable indefinitely
+- Native Cloudflare rate limiting on `POST /redeem` (20 req/60s per IP),
+  closing a bypass where omitting the fingerprint from the request body
+  skipped device-binding enforcement entirely
+
+### Changed
+
+- Access-code device fingerprint moved from `sessionStorage` to
+  `localStorage` — required for single-device binding to survive a closed
+  browser tab/session without wrongly rejecting the legitimate holder later
+
+### Infrastructure
+
+- Wrangler upgraded 3→4 (worker), required for the native rate-limit binding
+- Added `vitest-pool-workers` — this repo's first worker-level test
+  infrastructure, scoped to `POST /redeem`'s new branches (14 tests)
+
+### Deferred
+
+- The entry gate's public "REQUEST ACCESS" form remains unwired (a separate,
+  larger capability — a stranger-facing request/review queue — tracked in
+  TODOS.md, not built this round)
+
 ## [1.2.0.0] - 2026-08-13
 
 ### Added
