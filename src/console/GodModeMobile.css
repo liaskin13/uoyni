@@ -4,7 +4,7 @@
    surface, not ArchitectConsole/ContextStrip made responsive. */
 
 .gmm-root {
-  min-height: 100vh;
+  min-height: 100svh;
   background: var(--void);
   color: var(--text-primary);
   font-family: var(--font-primary);

@@ -147,6 +147,12 @@ function App() {
     setStage("entry");
   };
 
+  // Lets a tier-A phone session move between GOD MODE MOBILE and the
+  // listening view without logging out — neither direction touches the
+  // session, they're just two screens the same login can reach.
+  const handleBrowseVault = () => setStage("room");
+  const handleBackToGodModeMobile = () => setStage("godmode-mobile");
+
   const handleBroadcast = () => {
     setIsBroadcasting(true);
     setTimeout(() => setIsBroadcasting(false), BROADCAST_DURATION_MS);
@@ -200,6 +206,9 @@ function App() {
         <ListenerShell
           onPowerDown={handlePowerDown}
           sessionMeta={sessionMeta}
+          onGodModeMobile={
+            sessionMeta?.tier === "A" ? handleBackToGodModeMobile : undefined
+          }
         />
       </Suspense>
     );
@@ -220,7 +229,11 @@ function App() {
       <>
         {offlineBanner}
         <Suspense fallback={null}>
-          <GodModeMobile owner={owner} onPowerDown={handlePowerDown} />
+          <GodModeMobile
+            owner={owner}
+            onPowerDown={handlePowerDown}
+            onBrowseVault={handleBrowseVault}
+          />
         </Suspense>
       </>
     );

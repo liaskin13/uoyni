@@ -107,7 +107,7 @@ function readPersistedSession() {
   return null;
 }
 
-function ListenerShell({ onPowerDown, sessionMeta, code }) {
+function ListenerShell({ onPowerDown, sessionMeta, code, onGodModeMobile }) {
   const [codeSession, setCodeSession] = useState(() => readPersistedSession());
   const [showWelcome, setShowWelcome] = useState(false);
   const [vaults, setVaults] = useState(LISTENER_VAULTS_FALLBACK);
@@ -277,13 +277,24 @@ function ListenerShell({ onPowerDown, sessionMeta, code }) {
             <span className="listener-header-guest">{codeSession.grantedTo}</span>
           )}
         </div>
-        <button
-          className="listener-exit"
-          onClick={code ? () => { window.history.back(); window.close(); } : onPowerDown}
-          aria-label={code ? "Close" : "Exit system"}
-        >
-          {code ? "CLOSE" : "EXIT"}
-        </button>
+        <div className="listener-header-actions">
+          {onGodModeMobile && (
+            <button
+              className="listener-exit"
+              onClick={onGodModeMobile}
+              aria-label="Go to access codes"
+            >
+              CODES
+            </button>
+          )}
+          <button
+            className="listener-exit"
+            onClick={code ? () => { window.history.back(); window.close(); } : onPowerDown}
+            aria-label={code ? "Close" : "Exit system"}
+          >
+            {code ? "CLOSE" : "EXIT"}
+          </button>
+        </div>
       </header>
 
       <AnimatePresence>

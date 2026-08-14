@@ -1642,6 +1642,11 @@ h3,
   }
 }
 
+.listener-header-actions {
+  display: flex;
+  align-items: center;
+}
+
 .listener-exit {
   background: none;
   border: none;

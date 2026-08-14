@@ -38,7 +38,7 @@ function QRCode({ value }) {
   );
 }
 
-function GodModeMobile({ owner, onPowerDown }) {
+function GodModeMobile({ owner, onPowerDown, onBrowseVault }) {
   const [name, setName] = useState("");
   const [tier, setTier] = useState(DEFAULT_TIER);
   const [expiresAt, setExpiresAt] = useState(defaultExpiryISO());
@@ -119,7 +119,18 @@ function GodModeMobile({ owner, onPowerDown }) {
       <div className="gmm-header">
         <span className="gmm-header-label">Access Codes</span>
         <div className="gmm-header-right">
-          <span className="gmm-owner-badge">{owner}</span>
+          <span className="gmm-owner-badge">
+            {owner === "D" ? "D · GOD MODE" : "L · GOD MODE PLUS"}
+          </span>
+          {onBrowseVault && (
+            <button
+              className="gmm-exit-btn"
+              onClick={onBrowseVault}
+              aria-label="Go to listening view"
+            >
+              LISTEN
+            </button>
+          )}
           <button className="gmm-exit-btn" onClick={onPowerDown} aria-label="Exit">
             EXIT
           </button>
