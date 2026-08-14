@@ -15,9 +15,14 @@
   /* ── TYPOGRAPHY (canonical) ──────────────────────── */
   --text-primary: #f0ede8;
   /* warm off-white */
-  --text-secondary: #7a7a7a;
-  /* 4.53:1 on --surface — WCAG AA */
-  --text-muted: #797979;
+  --text-secondary: #999999;
+  /* ~7.15:1 on --void — comfortably above WCAG AA (was #7a7a7a at ~4.5:1,
+     technically passing but murky; brightened 2026-08-14 for real-world
+     legibility, not just the minimum bar) */
+  --text-muted: #8a8a8a;
+  /* ~5.9:1 on --void — still the more muted of the two tokens (preserves
+     the intended hierarchy vs --text-secondary), also brightened from the
+     near-identical #797979 it used to sit at */
 
   /* ── IDENTITY (filled by theme, transparent by default) ── */
   --identity: transparent;
