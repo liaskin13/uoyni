@@ -14,7 +14,9 @@ import {
   quantizeToBeat,
   resolveTrackBpm,
   resolveBpmAtTime,
+  resolveDownbeatOffsetForQuantize,
   DETECTED_BPM_CONFIDENCE_THRESHOLD,
+  QUANTIZE_DOWNBEAT_CONFIDENCE_THRESHOLD,
 } from "../ArchitectConsole";
 
 describe("resolveBpmAtTime — regression parity with resolveTrackBpm (highest-risk path)", () => {
@@ -195,5 +197,88 @@ describe("quantizeToBeat", () => {
     // with no offsetSec the snap is still relative to absolute 0, not the segment start.
     const beatSeconds140 = 60 / 140;
     expect(quantizeToBeat(10.1, bpmAt)).toBeCloseTo(Math.round(10.1 / beatSeconds140) * beatSeconds140, 5);
+  });
+});
+
+describe("resolveDownbeatOffsetForQuantize", () => {
+  it("REGRESSION-CRITICAL: a track with no downbeat data at all returns 0, identical to today's behavior", () => {
+    // Every track before this ships has neither field — this must be a pure no-op.
+    expect(resolveDownbeatOffsetForQuantize({}, 42.5)).toBe(0);
+    expect(resolveDownbeatOffsetForQuantize(null, 42.5)).toBe(0);
+    expect(
+      resolveDownbeatOffsetForQuantize({ bpm_display: "128" }, 42.5),
+    ).toBe(0);
+  });
+
+  it("no grid points, confidence above threshold: returns the track-level offset", () => {
+    const track = {
+      detected_downbeat_offset: 1.25,
+      detected_downbeat_confidence: QUANTIZE_DOWNBEAT_CONFIDENCE_THRESHOLD,
+    };
+    expect(resolveDownbeatOffsetForQuantize(track, 50)).toBe(1.25);
+  });
+
+  it("no grid points, confidence below threshold: returns 0, not a low-confidence guess", () => {
+    const track = {
+      detected_downbeat_offset: 1.25,
+      detected_downbeat_confidence: QUANTIZE_DOWNBEAT_CONFIDENCE_THRESHOLD - 0.01,
+    };
+    expect(resolveDownbeatOffsetForQuantize(track, 50)).toBe(0);
+  });
+
+  it("grid points present, matching segment confidence above threshold: returns that anchor's downbeatOffset", () => {
+    const track = {
+      beat_grid_points: [
+        { time: 0, bpm: 120, downbeatOffset: 0.3, downbeatConfidence: 0.9 },
+        { time: 40, bpm: 140, downbeatOffset: 40.1, downbeatConfidence: QUANTIZE_DOWNBEAT_CONFIDENCE_THRESHOLD },
+      ],
+    };
+    expect(resolveDownbeatOffsetForQuantize(track, 50)).toBe(40.1);
+    expect(resolveDownbeatOffsetForQuantize(track, 10)).toBe(0.3);
+  });
+
+  it("grid points present, matching segment confidence below threshold: returns 0", () => {
+    const track = {
+      beat_grid_points: [
+        { time: 0, bpm: 120, downbeatOffset: 0.3, downbeatConfidence: 0.1 },
+      ],
+    };
+    expect(resolveDownbeatOffsetForQuantize(track, 10)).toBe(0);
+  });
+
+  it("grid points present but the matching anchor has no downbeat data at all: returns 0", () => {
+    // e.g. a manually-inserted anchor (DeckWaveformV2's double-click-insert
+    // path constructs a fresh {time, bpm} with no downbeat fields) mixed in
+    // among detected anchors.
+    const track = {
+      beat_grid_points: [{ time: 0, bpm: 120 }],
+    };
+    expect(resolveDownbeatOffsetForQuantize(track, 10)).toBe(0);
+  });
+
+  it("falls back to the first anchor's downbeat data for time before it, matching resolveBpmAtTime's own convention", () => {
+    const track = {
+      beat_grid_points: [
+        { time: 10, bpm: 120, downbeatOffset: 10.2, downbeatConfidence: 0.9 },
+      ],
+    };
+    expect(resolveDownbeatOffsetForQuantize(track, 0)).toBe(10.2);
+  });
+
+  it("data-integrity edge case: no grid points, confidence clears the bar, but detected_downbeat_offset itself is missing — falls back to 0, not undefined", () => {
+    const track = {
+      detected_downbeat_confidence: QUANTIZE_DOWNBEAT_CONFIDENCE_THRESHOLD,
+      // detected_downbeat_offset intentionally absent
+    };
+    expect(resolveDownbeatOffsetForQuantize(track, 50)).toBe(0);
+  });
+
+  it("data-integrity edge case: matching anchor's confidence clears the bar but downbeatOffset itself is missing — falls back to 0, not undefined", () => {
+    const track = {
+      beat_grid_points: [
+        { time: 0, bpm: 120, downbeatConfidence: 0.9 }, // downbeatOffset intentionally absent
+      ],
+    };
+    expect(resolveDownbeatOffsetForQuantize(track, 10)).toBe(0);
   });
 });

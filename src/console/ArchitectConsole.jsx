@@ -228,6 +228,42 @@ export function resolveBpmAtTime(track, timeSec) {
   return bpm;
 }
 
+// Stricter than detectDownbeatPhase's own MIN_DOWNBEAT_CONTRAST=0.15 (that's
+// the floor for "does this exist at all" — a badge-display risk). Acting on
+// it to move where a loop starts is higher-stakes than showing a badge, so
+// it needs a materially higher bar: more than double the existence floor.
+export const QUANTIZE_DOWNBEAT_CONFIDENCE_THRESHOLD = 0.35;
+
+// Extracted for unit testing — mirrors resolveBpmAtTime's exact walk pattern
+// (same sorted beat_grid_points array, same "last anchor with time <=
+// timeSec" logic) but resolves downbeatOffset/downbeatConfidence instead of
+// bpm, and returns 0 (today's unchanged default) when no grid points exist
+// or confidence doesn't clear the bar. REGRESSION-CRITICAL, same class as
+// resolveBpmAtTime: with no downbeat data at all (every track before this
+// ships), this must return 0 — identical to today's behavior.
+export function resolveDownbeatOffsetForQuantize(track, timeSec) {
+  const points = parseBeatGridPoints(track?.beat_grid_points)
+    .filter((p) => p && Number.isFinite(p.time))
+    .sort((a, b) => a.time - b.time);
+
+  if (points.length === 0) {
+    if ((track?.detected_downbeat_confidence ?? 0) >= QUANTIZE_DOWNBEAT_CONFIDENCE_THRESHOLD) {
+      return track.detected_downbeat_offset ?? 0;
+    }
+    return 0;
+  }
+
+  let anchor = points[0];
+  for (const p of points) {
+    if (p.time <= timeSec) anchor = p;
+    else break;
+  }
+  if ((anchor.downbeatConfidence ?? 0) >= QUANTIZE_DOWNBEAT_CONFIDENCE_THRESHOLD) {
+    return anchor.downbeatOffset ?? 0;
+  }
+  return 0;
+}
+
 // Extracted for unit testing — snaps timeSec to the nearest beat boundary.
 // bpmAt is a resolver function, not a raw number, so position-aware lookups
 // (multi-point beatgrid, Part 3) can slot in later without touching call sites.
@@ -1267,6 +1303,8 @@ function ArchitectConsole({
         detectedBeatOffset,
         detectedBpmConfidence,
         tempoSegments,
+        detectedDownbeatOffset,
+        detectedDownbeatConfidence,
       } = await generateAndUploadWaveformV2(track.id, url, (pct) => {
         setWaveformProgress((prev) => ({ ...prev, [track.id]: pct }));
         if (shouldAnnounce && pct % 25 === 0 && pct > 0) {
@@ -1294,6 +1332,8 @@ function ArchitectConsole({
           detected_bpm: detectedBpm,
           detected_beat_offset: detectedBeatOffset,
           detected_bpm_confidence: detectedBpmConfidence,
+          detected_downbeat_offset: detectedDownbeatOffset,
+          detected_downbeat_confidence: detectedDownbeatConfidence,
         });
         if (duration != null) {
           setTrackListData((prev) =>
@@ -1306,6 +1346,8 @@ function ArchitectConsole({
                     detected_bpm: detectedBpm,
                     detected_beat_offset: detectedBeatOffset,
                     detected_bpm_confidence: detectedBpmConfidence,
+                    detected_downbeat_offset: detectedDownbeatOffset,
+                    detected_downbeat_confidence: detectedDownbeatConfidence,
                   }
                 : t,
             ),
@@ -1317,8 +1359,16 @@ function ArchitectConsole({
       // Auto-seed multi-point beatgrid anchors when the detector found real
       // tempo drift (plan T7) — null means stable tempo, leave beat_grid_points
       // unset entirely rather than writing a spurious single-anchor grid.
+      // EXCEPTION: if this track previously had drift-era grid points (from
+      // an earlier Regenerate) and now reads as flat, those points — and the
+      // per-anchor downbeatOffset/downbeatConfidence they carry — are stale
+      // and must be explicitly cleared, or resolveBpmAtTime/
+      // resolveDownbeatOffsetForQuantize keep resolving against the old,
+      // now-outdated segment data instead of the fresh flat-tempo values.
       if (tempoSegments) {
         handleBeatGridPointsChange(track, tempoSegments);
+      } else if (parseBeatGridPoints(track?.beat_grid_points).length > 0) {
+        handleBeatGridPointsChange(track, null);
       }
     } catch (err) {
       if (shouldAnnounce) announce(`Waveform failed: ${err.message}`);
@@ -1856,7 +1906,13 @@ function ArchitectConsole({
 
   const handleApplyLoopLength = (option) => {
     if (!audioEngine.isLoaded() || !loadedTrack) return;
-    const bpm = resolveTrackBpm(loadedTrack);
+    // Position-aware, not resolveTrackBpm's single track-wide value — this
+    // MUST resolve the same anchor/segment resolveDownbeatOffsetForQuantize
+    // below picks (both mirror the identical "last anchor with time <=
+    // timeSec" walk), or the loop-length math (beatSeconds) and the
+    // downbeat-offset anchor come from different segments on a drift track,
+    // silently mis-quantizing the loop start to a non-downbeat position.
+    const bpm = resolveBpmAtTime(loadedTrack, currentTime);
     if (!bpm) {
       announce("BPM unavailable for loop length.");
       return;
@@ -1865,7 +1921,7 @@ function ArchitectConsole({
     if (!beats) return;
     const beatSeconds = 60 / bpm;
     const start = quantizeEnabled
-      ? quantizeToBeat(currentTime, () => bpm)
+      ? Math.max(0, quantizeToBeat(currentTime, () => bpm, resolveDownbeatOffsetForQuantize(loadedTrack, currentTime)))
       : currentTime;
     const end = start + beats * beatSeconds;
     setLoopRegion({ start, end });
