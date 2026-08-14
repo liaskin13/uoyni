@@ -19,6 +19,16 @@ jobs:
 
   e2e-smoke:
     runs-on: ubuntu-latest
+    env:
+      # .env is gitignored and never present in CI. Without it,
+      # VITE_UPLOAD_WORKER_URL falls back to the "localhost" default in
+      # src/config.js, which flips src/lib/tracks.js's IS_DEV flag true and
+      # routes every track fetch through a localStorage-only dev path —
+      # bypassing both the real worker and these tests' network-level
+      # page.route() mocks entirely. Set to the real worker URL (public,
+      # not a secret — see worker/wrangler.toml) so IS_DEV is false and the
+      # normal network path (mockable / real, matching local dev) is used.
+      VITE_UPLOAD_WORKER_URL: https://psc-upload-worker.psoulc.workers.dev
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

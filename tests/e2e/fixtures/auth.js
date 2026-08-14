@@ -17,12 +17,4 @@ export async function loginToConsole(page, owner = "D") {
   await page.keyboard.type(RESIDENT_CODES[owner]);
   await page.keyboard.press("Enter");
   await page.getByText("LOAD DECK").waitFor({ state: "visible", timeout: 15_000 });
-  // "LOAD DECK" confirms the console shell has mounted, but the track list
-  // itself populates from a separate async fetchAllTracks() call — on a
-  // resource-constrained CI runner that gap can outlast the default 5000ms
-  // expect() timeout, so callers that immediately assert on a specific
-  // track row see "element(s) not found" rather than a real app bug. Wait
-  // here, once, with a generous budget, so every downstream assertion runs
-  // against an already-populated list.
-  await page.locator(".arch-track-row").first().waitFor({ state: "visible", timeout: 15_000 });
 }
