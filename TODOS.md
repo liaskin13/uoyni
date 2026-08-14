@@ -9,6 +9,36 @@ and enough context to pick it up cold.
 
 ---
 
+### Backfill CHANGELOG.md for the 2026-05-26 → 2026-08-13 gap
+
+**Priority:** Low
+**Blocked by:** Nothing — explicitly wanted as a personal record, not urgent.
+
+**What:** CHANGELOG.md went untouched from 2026-05-26 (v1.1.0) until versioning
+discipline was adopted on 2026-08-13 (v1.2.0.0) — real releases shipped in
+that window with no changelog entry (waveform v2, SA 5-band Bark color
+science, beat detection PR1/PR2, batch upload, guest flow work, and more).
+Reconstruct entries for that period from `git log`, grouped by theme, dated
+by merge date.
+
+**Why:** L asked directly (2026-08-13): "id like to construct the past
+changelog... id like to see it myself, actually. like a record or how far we
+have come." Not a technical need — a record of the project's actual
+trajectory, meant to be reviewed personally, not just auto-generated and
+forgotten.
+
+**Context:** `git log --oneline main` has the full commit history to work
+from; the gstack checkpoints under `~/.gstack/projects/liaskin13-psoulc/checkpoints/`
+and this project's own memory files have richer narrative context (why
+things were built, what problems they solved) than commit messages alone —
+worth drawing on both, not just commit subjects, so the entries read as a
+real story rather than a mechanical git-log dump.
+
+**Depends on:** Nothing technical. Best done as its own focused session, not
+folded into an unrelated ship.
+
+---
+
 ### Test suite — Vitest baseline
 
 **Priority:** High
@@ -210,6 +240,95 @@ may differ.
 **Context:** For #2, the fix is likely either raising the Playwright assertion timeout on this specific page, or adding an explicit `waitForLoadState`/network-idle wait after `mockTracksApi(page)` + `loginToConsole(page)` before asserting on rendered content, rather than relying on the default 5s `toHaveText` timeout. Should be re-tested with several repeated CI runs (not just one) before considering it actually fixed, since flaky failures don't reproduce every time.
 
 **Depends on:** Nothing technical.
+
+---
+
+### Hot-cue placement doesn't use downbeat data, unlike loop-length quantize
+
+**Priority:** Low
+**Blocked by:** Nothing — needs a product decision, not a technical blocker.
+
+**What:** PR2 Item 5 wired detected downbeat data into loop-length quantize
+(`handleApplyLoopLength`) but not hot-cue placement (`handleHotCueClick`) —
+`quantizeToBeat`'s in `ArchitectConsole.jsx`. Both call the same underlying
+`quantizeToBeat` helper with `quantizeEnabled` on, but only the loop-length
+path passes a downbeat-aware `offsetSec`.
+
+**Why:** Surfaced by adversarial review during the Item 5 ship — same "snap to
+beat" pattern now behaves differently for two features in the same console.
+Wasn't in Item 5's original spec (which only named loop-length quantize), so
+deliberately not folded in during that ship.
+
+**Context:** Real product question before touching this: does D want hot cues
+to snap to the actual downbeat too, or is snapping to the nearest raw beat
+intentional for cue placement (which is often mid-phrase, not bar-aligned)?
+If yes, the fix is one line — pass `resolveDownbeatOffsetForQuantize(loadedTrack, currentTime)`
+as `handleHotCueClick`'s third `quantizeToBeat` argument, mirroring
+`handleApplyLoopLength`'s exact change.
+
+**Depends on:** A product decision (with D) on whether hot cues should be
+downbeat-aware at all.
+
+---
+
+### GET /tracks (no vault filter) has no auth check — exposes console-only DSP columns
+
+**Priority:** Medium
+**Blocked by:** Nothing — pre-existing gap, not introduced by any specific branch.
+
+**What:** `worker/upload-worker.js`'s `GET /tracks` handler (distinct from
+`GET /tracks/:vault`, which correctly gates its DSP columns behind
+`isAuthenticated`) has no auth check at all, so `detected_bpm`,
+`detected_beat_offset`, `detected_bpm_confidence`, `beat_grid_points`, and
+(as of PR2 Item 5) `detected_downbeat_offset`/`detected_downbeat_confidence`
+are all readable by any unauthenticated caller.
+
+**Why:** Flagged independently by both the Security and API Contract
+specialist reviews during Item 5's ship — the code's own comment on the
+sibling `GET /tracks/:vault` endpoint states this data is "D's internal
+production metadata — console-only, never guest-facing," but `GET /tracks`
+doesn't honor that. Pre-existing (predates Item 5 by at least 2 migrations),
+widened rather than introduced by adding 2 more low-sensitivity float columns
+to the already-exposed list.
+
+**Context:** Fix is mechanical — apply the same `isAuthenticated`-gated
+`dspColumns` pattern `GET /tracks/:vault` already uses (see
+`worker/upload-worker.js` ~line 224-229) to `GET /tracks` as well. Worth
+checking why `GET /tracks` exists as a separate unauthenticated endpoint at
+all before just gating it — if nothing legitimately needs the unauthenticated
+cross-vault listing, consider requiring auth for the whole route instead.
+
+**Depends on:** Nothing technical.
+
+---
+
+### Investigate root cause of recurring Codespace commit-signing failures
+
+**Priority:** Low
+**Blocked by:** Nothing.
+
+**What:** `git commit` fails with `gpg failed to sign the data... 403 | Author
+is invalid` from the Codespace's `gh-gpgsign` signing helper — recurred across
+multiple sessions (documented in `tasks/lessons.md`, and again during PR2 Item
+5's ship tonight). Every occurrence so far has been bypassed with
+`--no-gpg-sign` after explicit user approval, never actually root-caused.
+
+**Why:** User asked directly tonight (2026-08-13) to add this rather than
+keep bypassing it silently forever: "add a todo to figure out why this is
+happening and we can address."
+
+**Context:** `tasks/lessons.md`'s existing entry documents the symptom
+(content merges cleanly, no conflict markers — this is signing-specific, not
+a git-state or identity problem) and the working-but-unexplained bypass. Not
+yet investigated: whether this is a stale internal Codespace signing token
+(possibly tied to a long-running session surviving a client
+disconnect/reconnect, per the existing lesson's hypothesis), a GitHub-side
+gpg-sign helper config issue specific to this Codespace, or something else
+entirely. A genuine Codespace restart (suggested but not yet tried per the
+existing lesson) is the obvious first experiment.
+
+**Depends on:** Nothing technical — needs someone to actually reproduce and
+diagnose it instead of bypassing on sight.
 
 ---
 
