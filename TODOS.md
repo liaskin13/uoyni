@@ -52,41 +52,30 @@ zero DESIGN.md coverage.
 
 ---
 
-### Build the ACCESS CODES management panel (backend already built)
+### ~~Build the ACCESS CODES management panel~~ — RESOLVED 2026-08-14 (as GOD MODE MOBILE)
 
-**Priority:** High
-**Blocked by:** Nothing. Backend is fully built and verified working — only
-the frontend UI is missing.
+**Status: shipped, deployed, live-QA'd** — but not where this entry originally
+assumed. `/office-hours` that session confirmed D/L will only ever grant
+access from their phones, so instead of building into `ContextStrip.jsx:161`
+(desktop console, viewer=L only), the real build was a new phone-only surface
+covering both D and L (`tier === "A" && isMobile`) — see the GOD MODE MOBILE
+design doc:
+`~/.gstack/projects/liaskin13-psoulc/codespace-main-design-20260814-113335.md`.
 
-**What:** `ContextStrip.jsx:113-121` already has a working "ACCESS CODES"
-button (visible to L only, `viewer === "L"`) that toggles open the same
-`activeContext` body-panel mechanism the COMMS-box BEATGRID help feature
-(above) is about to extend for a second purpose. But the panel body itself,
-at `ContextStrip.jsx:161`, is a literal placeholder:
-`ACCESS CODE MANAGEMENT — COMING SOON`.
+`ContextStrip.jsx:161`'s `ACCESS CODE MANAGEMENT — COMING SOON` placeholder is
+now effectively moot, not still-pending — the real need was mobile, not
+desktop. Leaving the placeholder text as-is unless it becomes confusing later.
 
-The worker backend is complete and was exercised directly during the
-2026-08-14 `/cso` security audit: `POST /access-codes` (generate a code,
-tier + optional `granted_to`/`expires_at`), `GET /access-codes` (list active
-codes), `PUT /access-codes/:id/revoke` (revoke one) all work correctly and
-are auth-gated. Only the frontend — generate button, list of active codes
-with tier/granted-to/expiry, revoke action per row — needs to be built and
-wired to `src/lib/accessCodes.js` (already has `generateAccessCode`,
-`listAccessCodes`, `revokeAccessCode` helper functions ready to call).
+**Also resolved as part of this build**, contrary to this entry's original
+"no product ambiguity" framing: single-device binding on `/redeem` (a code
+can no longer be freely reshared once claimed), QR-code delivery, and a
+required Wrangler 3→4 upgrade for native rate limiting. The scope grew
+substantially beyond "just the frontend" once live-tested — see the design
+doc for the full trail.
 
-**Why:** This is L's own tool for distributing access to D's vault — the
-core mechanism the whole M³ tier system depends on for actually granting
-guests entry. An old, now-superseded session note (`NEXT_SESSION.md`,
-session 3, historical) called this "Zone B: ACCESS CODES panel — highest
-priority feature backlog." It never made it into this file's tracked list
-until the security audit surfaced it while checking `ContextStrip.jsx` for
-an unrelated question.
-
-**Context:** Needs a UX pass on layout (a list of active codes with
-tier/expiry/revoke, plus a generate form) but no backend work and no product
-ambiguity — the worker contract is already fixed and tested.
-
-**Depends on:** Nothing technical.
+**What's still genuinely open**, split out as its own entry: the
+stranger-facing REQUEST ACCESS review queue (Capability 2, below) — that one
+really does still need backend work.
 
 ---
 
