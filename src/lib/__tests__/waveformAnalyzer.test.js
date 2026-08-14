@@ -11,7 +11,9 @@ import {
   packToBinary,
   unpackFromBinary,
   analyzeAudio,
+  computeDownbeatData,
 } from "../waveformAnalyzer";
+import { phaseWeightedBars } from "./genreFixtures";
 
 // ── WAVEFORM_V2_SENTINEL ──────────────────────────────────────────────────────
 
@@ -213,5 +215,93 @@ describe("analyzeAudio — AudioContext lifecycle", () => {
     // This is the line that proves the fix — close() must fire in the
     // failure path too, not just the happy path.
     expect(close).toHaveBeenCalledOnce();
+  });
+});
+
+// ── computeDownbeatData (PR2 Item 5 — flat-tempo vs drift-segment branching) ──
+// phaseWeightedBars (bass strongly favors `downbeatPhase` mod 4) is shared
+// with beatDetector.test.js — see genreFixtures.js. All calls below use the
+// default bpm=120 (0.5s/beat).
+
+describe("computeDownbeatData", () => {
+  describe("flat tempo (tempoSegments === null)", () => {
+    it("calls detectDownbeatPhase directly on detected.beatTimesSec and surfaces the result at the top level", () => {
+      const { bars, beatTimesSec } = phaseWeightedBars({ numBeats: 12, downbeatPhase: 1 });
+      const detected = { beatTimesSec };
+      const result = computeDownbeatData(bars, detected, null, 6);
+      expect(result.detectedDownbeatOffset).toBeCloseTo(beatTimesSec[1], 5);
+      expect(result.detectedDownbeatConfidence).toBeGreaterThan(0.5);
+      expect(result.tempoSegmentsWithDownbeat).toBeNull();
+    });
+
+    it("surfaces both fields as null when detectDownbeatPhase declines to guess", () => {
+      const beatTimesSec = Array.from({ length: 12 }, (_, i) => i * 0.5);
+      const flatBars = Array.from({ length: 400 }, () => ({ bass: 0.3 }));
+      const detected = { beatTimesSec };
+      const result = computeDownbeatData(flatBars, detected, null, 6);
+      expect(result.detectedDownbeatOffset).toBeNull();
+      expect(result.detectedDownbeatConfidence).toBeNull();
+    });
+
+    it("treats an empty tempoSegments array the same as null (flat-tempo branch, not an empty drift map)", () => {
+      // Defensive: !tempoSegments alone doesn't catch a truthy-but-empty [],
+      // which would otherwise fall into the drift branch and persist a
+      // truthy-but-empty tempoSegmentsWithDownbeat, contradicting the
+      // documented "leave beat_grid_points unset" contract.
+      const { bars, beatTimesSec } = phaseWeightedBars({ numBeats: 12, downbeatPhase: 1 });
+      const detected = { beatTimesSec };
+      const result = computeDownbeatData(bars, detected, [], 6);
+      expect(result.tempoSegmentsWithDownbeat).toEqual([]);
+      expect(result.detectedDownbeatOffset).toBeCloseTo(beatTimesSec[1], 5);
+    });
+  });
+
+  describe("drift present (tempoSegments is an anchor array)", () => {
+    it("top-level detectedDownbeatOffset/Confidence stay null — that data lives on the anchors instead", () => {
+      const { bars } = phaseWeightedBars({ numBeats: 12, downbeatPhase: 0 });
+      const tempoSegments = [{ time: 0, bpm: 120 }];
+      const result = computeDownbeatData(bars, { beatTimesSec: [] }, tempoSegments, 6);
+      expect(result.detectedDownbeatOffset).toBeNull();
+      expect(result.detectedDownbeatConfidence).toBeNull();
+    });
+
+    it("an interior anchor's segment end is the NEXT anchor's time, not duration", () => {
+      // Anchor 0 spans [0, 5) at 120bpm (10 beats — clears MIN_DOWNBEAT_BEATS=8);
+      // anchor 1 spans [5, duration=10) at 120bpm (also 10 beats). Downbeat
+      // phase 2 (strong bass) throughout — both anchors should find it, each
+      // within its own segment's synthesized grid.
+      const { bars } = phaseWeightedBars({ numBeats: 22, downbeatPhase: 2 });
+      const tempoSegments = [
+        { time: 0, bpm: 120 },
+        { time: 5, bpm: 120 },
+      ];
+      const result = computeDownbeatData(bars, { beatTimesSec: [] }, tempoSegments, 10);
+      expect(result.tempoSegmentsWithDownbeat).toHaveLength(2);
+      const [first, second] = result.tempoSegmentsWithDownbeat;
+      expect(first.downbeatOffset).toBeDefined();
+      expect(second.downbeatOffset).toBeDefined();
+      // Both anchors preserve their original time/bpm fields alongside the new ones.
+      expect(first.time).toBe(0);
+      expect(second.time).toBe(5);
+    });
+
+    it("the last anchor's segment end falls back to duration when there's no next anchor", () => {
+      const { bars } = phaseWeightedBars({ numBeats: 16, downbeatPhase: 3 });
+      const tempoSegments = [{ time: 0, bpm: 120 }];
+      const result = computeDownbeatData(bars, { beatTimesSec: [] }, tempoSegments, 8);
+      // A too-short duration (< 8 beats worth) should yield a grid under
+      // MIN_DOWNBEAT_BEATS and no downbeat data on the anchor.
+      const resultShort = computeDownbeatData(bars, { beatTimesSec: [] }, tempoSegments, 1.5);
+      expect(resultShort.tempoSegmentsWithDownbeat[0].downbeatOffset).toBeUndefined();
+      // The full 8s duration gives enough beats to find the phase-3 downbeat.
+      expect(result.tempoSegmentsWithDownbeat[0].downbeatOffset).toBeDefined();
+    });
+
+    it("an anchor where detection declines to guess is returned unchanged (no extra fields)", () => {
+      const flatBars = Array.from({ length: 400 }, () => ({ bass: 0.3 }));
+      const tempoSegments = [{ time: 0, bpm: 120 }];
+      const result = computeDownbeatData(flatBars, { beatTimesSec: [] }, tempoSegments, 6);
+      expect(result.tempoSegmentsWithDownbeat[0]).toEqual({ time: 0, bpm: 120 });
+    });
   });
 });

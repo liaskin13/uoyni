@@ -326,3 +326,107 @@ export function detectTempoSegments(envelope, frameRate, opts = {}) {
 
   return anchors.map((a) => ({ time: a.time, bpm: a.bpm }));
 }
+
+const MIN_DOWNBEAT_BEATS = 8; // 2 full 4/4 bars — reuses dpBeatTrack's MIN_BEATS_REQUIRED convention
+const BASS_WINDOW_MS = 120; // kick sustain window per beat; stays under half a beat period even at MAX_BPM=200
+const MIN_DOWNBEAT_CONTRAST = 0.15; // winning phase must beat the other three's average by >=15%, else decline to guess
+
+/**
+ * Synthesizes a uniform beat-time grid for one tempo-drift segment, from
+ * startTime to endTime at bpm's beat spacing. Used to feed
+ * detectDownbeatPhase() a per-segment beatTimesSec array when tempoSegments
+ * are present (drift case) — mirroring what dpBeatTrack's own beatTimesSec
+ * already provides directly in the flat-tempo case, without introducing a
+ * second segmentation system.
+ *
+ * @param {number} startTime seconds, the segment anchor's own time
+ * @param {number} bpm the segment's bpm
+ * @param {number} endTime seconds, the next anchor's time or track end
+ * @returns {number[]} beat times in seconds, startTime inclusive, endTime exclusive
+ */
+export function synthesizeSegmentBeatGrid(startTime, bpm, endTime) {
+  if (!bpm || bpm <= 0 || !Number.isFinite(endTime) || endTime <= startTime) return [];
+  const beatPeriodSec = 60 / bpm;
+  const beatTimesSec = [];
+  for (let t = startTime; t < endTime; t += beatPeriodSec) {
+    beatTimesSec.push(t);
+  }
+  return beatTimesSec;
+}
+
+/**
+ * Detects which beat phase (0-3, mod 4) is the downbeat by comparing average
+ * bass energy in a short window after each beat instant. Kick emphasis on
+ * beat 1 is a standard, explainable downbeat cue (Jia/Lv/Liu 2019 documents
+ * "Bass Content" as a citation-backed classical MIR feature) — this is that
+ * same idea in simpler form, using the per-frame bass band already computed
+ * by analyzeAudio(). Never receives raw audio — same constraint as the rest
+ * of this module (see header).
+ *
+ * Declines to guess (returns null) below the MIN_DOWNBEAT_CONTRAST bar —
+ * this is deliberate, not a missing feature: four-on-the-floor house (equal
+ * kick energy on every beat) and half-time hip-hop/trap (kick similarly
+ * likely on 1 and 3) both correctly fall below the bar and return null
+ * rather than a confidently wrong guess. Always overridable via the existing
+ * manual anchor-drag editor.
+ *
+ * @param {{bass:number}[]} bars per-frame band data from analyzeAudio(), same array onsetEnvelope() consumes
+ * @param {number[]} beatTimesSec beat instants in seconds — either dpBeatTrack's own beatTimesSec (flat tempo) or synthesizeSegmentBeatGrid's output (drift segment)
+ * @param {{frameRate?: number}} [opts] frameRate must match bars' bars/sec (default 50)
+ * @returns {{downbeatOffset: number, downbeatConfidence: number} | null}
+ */
+export function detectDownbeatPhase(bars, beatTimesSec, opts = {}) {
+  const frameRate = opts.frameRate ?? 50;
+  if (!bars || !bars.length || !beatTimesSec || beatTimesSec.length < MIN_DOWNBEAT_BEATS) return null;
+
+  const windowFrames = Math.max(1, Math.round((BASS_WINDOW_MS / 1000) * frameRate));
+  const phaseEnergySum = [0, 0, 0, 0];
+  const phaseCount = [0, 0, 0, 0];
+
+  for (let i = 0; i < beatTimesSec.length; i++) {
+    const phase = i % 4;
+    const startFrame = Math.max(0, Math.round(beatTimesSec[i] * frameRate));
+    const endFrame = Math.min(bars.length - 1, startFrame + windowFrames - 1);
+    if (startFrame >= bars.length || startFrame > endFrame) continue;
+
+    let sum = 0;
+    let n = 0;
+    for (let f = startFrame; f <= endFrame; f++) {
+      sum += bars[f]?.bass ?? 0;
+      n++;
+    }
+    if (n > 0) {
+      phaseEnergySum[phase] += sum / n;
+      phaseCount[phase]++;
+    }
+  }
+
+  const phaseAvg = phaseEnergySum.map((sum, p) => (phaseCount[p] > 0 ? sum / phaseCount[p] : 0));
+
+  let bestPhase = 0;
+  for (let p = 1; p < 4; p++) {
+    if (phaseAvg[p] > phaseAvg[bestPhase]) bestPhase = p;
+  }
+
+  const otherAvg = phaseAvg.reduce((sum, v, p) => (p === bestPhase ? sum : sum + v), 0) / 3;
+
+  let contrast;
+  if (otherAvg <= 0) {
+    if (phaseAvg[bestPhase] <= 0) return null; // no bass energy anywhere — nothing to detect
+    contrast = 1; // winner has all the energy, others exactly zero — maximal contrast
+  } else {
+    contrast = (phaseAvg[bestPhase] - otherAvg) / otherAvg;
+  }
+
+  if (contrast < MIN_DOWNBEAT_CONTRAST) return null;
+
+  // First beat instance at the winning phase is a concrete, real timestamp —
+  // usable directly as quantizeToBeat's offsetSec anchor (its modular
+  // formula repeats every beatSeconds, so any one instance suffices as the
+  // phase reference — a loop length that's a multiple of 4 beats then lands
+  // exactly on this downbeat, not just on some beat).
+  return {
+    downbeatOffset: beatTimesSec[bestPhase],
+    downbeatConfidence: Math.min(1, contrast),
+  };
+}
