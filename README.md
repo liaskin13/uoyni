@@ -31,7 +31,7 @@ A visually striking, high-fidelity environment where skill, authenticity, and in
 
 * **Frontend:** React, Three.js, Web Audio API
 * **Backend:** cloudfare (audio storage, live streaming, track metadata, real-time presence)
-* **Task Management:** Tracked via `TODOS.md` (active work) and `tasks/lessons.md` (durable corrections/lessons). `tasks/todo.md` and `tasks/plan.active.md` are stale Phase 9 artifacts — see `CLAUDE.md`'s session-start checklist.
+* **Task Management:** Tracked via `TODOS.md` (active work), `CHANGELOG.md` (shipped releases), and `tasks/lessons.md` (durable corrections/lessons). `tasks/todo.md` and `tasks/plan.active.md` are stale Phase 9 artifacts — see `CLAUDE.md`'s session-start checklist.
 * **Workflow:** See `CLAUDE.md` for AI-assisted development conventions and guidelines.
 
 ---

@@ -144,6 +144,7 @@ Key routing rules:
 
 ### Custom deploy hooks
 - Pre-merge: `npm run preflight` (runs `check:design` + `check:pr` + `build`); CI (`.github/workflows/ci.yml`) also runs `npm test` and Playwright e2e smoke on push to `main` and on PRs
+- **D1 migrations (`worker/migrations/*.sql`):** the configured `CLOUDFLARE_API_TOKEN` has no D1 access at all via `wrangler` — not even read-only PRAGMA/SELECT — confirmed empirically 2026-08-13. Any new migration must be applied by hand via the Cloudflare dashboard's D1 console **before** deploying worker code that references its columns; Claude cannot apply or verify D1 schema state via CLI and must ask the user to confirm it's been applied in the dashboard.
 - Deploy trigger (run only the steps needed for what changed):
   1. `git push`
   2. If `worker/upload-worker.js` (or anything under `worker/`) changed: `cd worker && npx wrangler deploy` — requires `CLOUDFLARE_API_TOKEN` exported into the shell; it lives in root `.env` but is **not** auto-loaded when `cwd` is `worker/`, so export it manually first (`export CLOUDFLARE_API_TOKEN=$(grep -m1 CLOUDFLARE_API_TOKEN .env | cut -d= -f2-)`) or run from repo root
