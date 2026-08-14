@@ -495,18 +495,24 @@ cross-vault listing, consider requiring auth for the whole route instead.
 
 ### Investigate root cause of recurring Codespace commit-signing failures
 
-**Priority:** Low
+**Priority:** Medium — bumped from Low. Recurred yet again 2026-08-14 (GOD MODE
+MOBILE commit `1c30a70`), and this time L expected it to already be fixed
+("i thought we fixed this") — the gap between that expectation and reality is
+itself a signal this has gone unaddressed long enough to be worth real time,
+not just another bypass.
 **Blocked by:** Nothing.
 
 **What:** `git commit` fails with `gpg failed to sign the data... 403 | Author
 is invalid` from the Codespace's `gh-gpgsign` signing helper — recurred across
-multiple sessions (documented in `tasks/lessons.md`, and again during PR2 Item
-5's ship tonight). Every occurrence so far has been bypassed with
-`--no-gpg-sign` after explicit user approval, never actually root-caused.
+multiple sessions (documented in `tasks/lessons.md`; also during PR2 Item 5's
+ship on 2026-08-13; again on 2026-08-14 committing the GOD MODE MOBILE
+feature). Every occurrence so far has been bypassed with `--no-gpg-sign` after
+explicit user approval, never actually root-caused.
 
-**Why:** User asked directly tonight (2026-08-13) to add this rather than
-keep bypassing it silently forever: "add a todo to figure out why this is
-happening and we can address."
+**Why:** User asked directly on 2026-08-13 to add this rather than keep
+bypassing it silently forever: "add a todo to figure out why this is
+happening and we can address." Asked again on 2026-08-14 after it recurred a
+third documented time, visibly surprised it wasn't already resolved.
 
 **Context:** `tasks/lessons.md`'s existing entry documents the symptom
 (content merges cleanly, no conflict markers — this is signing-specific, not
