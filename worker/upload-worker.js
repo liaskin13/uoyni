@@ -87,19 +87,34 @@ export default {
       // POST /redeem — listener redeems an access code (public)
       // Validates code and returns tier; grants access to all published content.
       if (request.method === "POST" && url.pathname === "/redeem") {
+        // Rate limit before anything else — this endpoint is public and
+        // unauthenticated. Closes two gaps: brute-forcing the 4-digit code
+        // space (pre-existing, unrelated to binding), and the fact that
+        // omitting "fingerprint" from the body is a trivial full bypass of
+        // the device-binding check below (skip-on-null is intentional for
+        // real clients with blocked storage, but must not be a free pass
+        // for a scripted attacker).
+        const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
+        const { success: withinRateLimit } = await env.REDEEM_RATE_LIMITER.limit({ key: clientIp });
+        if (!withinRateLimit) {
+          return new Response(JSON.stringify({ error: "Too many attempts" }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+
         const body = await request.json();
         const { code, fingerprint } = body;
         if (!code) {
           return new Response(JSON.stringify({ error: "Missing code" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
-        // TEST BYPASS — remove before public launch
+        // TEST BYPASS — remove before public launch. Structurally exempt
+        // from device binding: returns before the row lookup, so 0000
+        // stays an unlimited-use test code regardless of the logic below.
         if (code === "0000") {
           return new Response(JSON.stringify({ valid: true, tier: "MEMBERS", grantedTo: "TEST" }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
         const row = await env.PSC_DB.prepare(
-          "SELECT id, tier, granted_to, revoked, expires_at, redeemed_at FROM access_codes WHERE id = ?"
+          "SELECT id, tier, granted_to, revoked, expires_at, redeemed_at, redeemed_by FROM access_codes WHERE id = ?"
         ).bind(code).first();
         if (!row) {
           return new Response(JSON.stringify({ error: "Code not found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -108,9 +123,22 @@ export default {
         if (row.revoked === 1 || isExpired) {
           return new Response(JSON.stringify({ error: "Code expired or revoked" }), { status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
-        if (!row.redeemed_at) {
+
+        // Single-device binding, keyed on redeemed_by (not redeemed_at —
+        // the one-time D1 reset that must run before this deploy nulls
+        // redeemed_by only, leaving redeemed_at as accurate history of
+        // when the code was first genuinely redeemed).
+        if (row.redeemed_by != null && fingerprint != null && row.redeemed_by !== fingerprint) {
+          return new Response(JSON.stringify({ error: "Code already claimed by another device" }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        if (row.redeemed_by == null) {
+          // Conditional write: only claim the code if it's still unclaimed
+          // at the moment this UPDATE executes. Closes the race between two
+          // devices calling /redeem for the same never-claimed code at
+          // nearly the same instant — D1's last-write-wins would otherwise
+          // silently decide the claimant off write-ordering luck.
           await env.PSC_DB.prepare(
-            "UPDATE access_codes SET redeemed_at = datetime('now'), redeemed_by = ? WHERE id = ?"
+            "UPDATE access_codes SET redeemed_at = COALESCE(redeemed_at, datetime('now')), redeemed_by = ? WHERE id = ? AND redeemed_by IS NULL"
           ).bind(fingerprint ?? null, code).run();
         }
         return new Response(JSON.stringify({

@@ -5,37 +5,208 @@ and enough context to pick it up cold.
 
 ---
 
-## Phase 11
+### Build the COMMS-box keyword-help system (BEATGRID v1)
+
+**Priority:** High — next session should start here.
+**Blocked by:** Nothing. Fully planned, not yet implemented.
+
+**What:** Let D type a keyword (e.g. `BEATGRID`) into the console's existing
+COMMS search input and press Enter to see contextual instructions, instead
+of relying on L to relay them by hand. Trigger: Enter-to-open — typing
+already live-filters the vault search unchanged; a small inline "⏎ HELP"
+hint appears when the typed text exactly matches a known topic, Enter
+expands the existing `activeContext` body panel (`ContextStrip.jsx`, same
+mechanism already used for `"nav"`/`"loop"`/`"access"`) with the
+instructions; Escape closes it without touching the search text. V1 ships
+exactly one topic — BEATGRID, verified against real `DeckWaveformV2.jsx`
+source (pause-to-edit gate, double-click empty space adds a snapped anchor,
+double-click an existing anchor is a no-op, `[`/`]` cycle selection, arrow
+keys nudge one beat / Shift one bar, no delete exists yet). New file
+`src/console/helpTopics.js` (keyword → label/lines registry); changes
+contained entirely to `ContextStrip.jsx`/`.css` — no `ArchitectConsole.jsx`
+changes needed.
+
+**Why:** L asked directly (2026-08-13): "how can we create hints &/or
+instructions somewhere for D to access at will... i would like to use my
+comms box at the bottom of the console for this kind of thing... ie. he
+types BEATGRID or whatever and these instructions are viewable or
+something." Confirmed self-serve discoverability was part of why the COMMS
+LCD exists at all, and that this is an intentional first step toward the
+broader console-button audit described in the "single hot-cue clear" item
+below — that audit is what should produce the next topics, not ad hoc
+additions on top of this v1.
+
+**Context:** Full implementation plan (exact code, exact CSS classes, exact
+BEATGRID copy, test list) is written out at
+`~/.claude/plans/and-read-lessons-and-concurrent-turing.md` — read that in
+full before building, don't re-derive it. A condensed version is also
+appended to `~/.claude/plans/vivid-finding-riddle.md` under "Next: COMMS box
+keyword-help system (BEATGRID v1)". Discovered but explicitly out of scope
+for this build: `ContextStrip.css` declares `font-family: 'JetBrains Mono'`
+for COMMS/REACH text, which is never loaded anywhere — see its own TODO
+entry below.
+
+**Depends on:** Nothing technical. Add a short new DESIGN.md section
+documenting this behavior as part of the build — COMMS/REACH currently have
+zero DESIGN.md coverage.
 
 ---
 
-### Backfill CHANGELOG.md for the 2026-05-26 → 2026-08-13 gap
+### Build the ACCESS CODES management panel (backend already built)
 
-**Priority:** Low
-**Blocked by:** Nothing — explicitly wanted as a personal record, not urgent.
+**Priority:** High
+**Blocked by:** Nothing. Backend is fully built and verified working — only
+the frontend UI is missing.
 
-**What:** CHANGELOG.md went untouched from 2026-05-26 (v1.1.0) until versioning
-discipline was adopted on 2026-08-13 (v1.2.0.0) — real releases shipped in
-that window with no changelog entry (waveform v2, SA 5-band Bark color
-science, beat detection PR1/PR2, batch upload, guest flow work, and more).
-Reconstruct entries for that period from `git log`, grouped by theme, dated
-by merge date.
+**What:** `ContextStrip.jsx:113-121` already has a working "ACCESS CODES"
+button (visible to L only, `viewer === "L"`) that toggles open the same
+`activeContext` body-panel mechanism the COMMS-box BEATGRID help feature
+(above) is about to extend for a second purpose. But the panel body itself,
+at `ContextStrip.jsx:161`, is a literal placeholder:
+`ACCESS CODE MANAGEMENT — COMING SOON`.
 
-**Why:** L asked directly (2026-08-13): "id like to construct the past
-changelog... id like to see it myself, actually. like a record or how far we
-have come." Not a technical need — a record of the project's actual
-trajectory, meant to be reviewed personally, not just auto-generated and
-forgotten.
+The worker backend is complete and was exercised directly during the
+2026-08-14 `/cso` security audit: `POST /access-codes` (generate a code,
+tier + optional `granted_to`/`expires_at`), `GET /access-codes` (list active
+codes), `PUT /access-codes/:id/revoke` (revoke one) all work correctly and
+are auth-gated. Only the frontend — generate button, list of active codes
+with tier/granted-to/expiry, revoke action per row — needs to be built and
+wired to `src/lib/accessCodes.js` (already has `generateAccessCode`,
+`listAccessCodes`, `revokeAccessCode` helper functions ready to call).
 
-**Context:** `git log --oneline main` has the full commit history to work
-from; the gstack checkpoints under `~/.gstack/projects/liaskin13-psoulc/checkpoints/`
-and this project's own memory files have richer narrative context (why
-things were built, what problems they solved) than commit messages alone —
-worth drawing on both, not just commit subjects, so the entries read as a
-real story rather than a mechanical git-log dump.
+**Why:** This is L's own tool for distributing access to D's vault — the
+core mechanism the whole M³ tier system depends on for actually granting
+guests entry. An old, now-superseded session note (`NEXT_SESSION.md`,
+session 3, historical) called this "Zone B: ACCESS CODES panel — highest
+priority feature backlog." It never made it into this file's tracked list
+until the security audit surfaced it while checking `ContextStrip.jsx` for
+an unrelated question.
 
-**Depends on:** Nothing technical. Best done as its own focused session, not
-folded into an unrelated ship.
+**Context:** Needs a UX pass on layout (a list of active codes with
+tier/expiry/revoke, plus a generate form) but no backend work and no product
+ambiguity — the worker contract is already fixed and tested.
+
+**Depends on:** Nothing technical.
+
+---
+
+### Build the request-review queue (Capability 2 — guest REQUEST ACCESS → L's console)
+
+**Priority:** Medium
+**Blocked by:** Nothing technical, but needs its own design session — the D1 table shape,
+request states, and notification strategy are all still open.
+
+**What:** A stranger visits the public entry screen, submits "REQUEST ACCESS," and the
+request lands in L's console (desktop) for review/approval — distinct from the mobile
+quick-grant flow (see the GOD MODE MOBILE design doc below), which is for people D/L
+already know. Approving a request should generate a real access code via the existing
+`/access-codes` backend and get it to the requester somehow.
+
+**Why:** L confirmed directly (2026-08-14 `/office-hours` session) that this is real and
+wanted: "the request access will go to my console for review." It's explicitly a second,
+separate capability from the mobile quick-grant work, deliberately sequenced after it —
+not because it's less real, but because it needs new backend work the quick-grant flow
+doesn't (no `access_requests`-equivalent table or endpoints exist today), while the
+mobile quick-grant flow reuses the fully-built `/access-codes` backend as-is.
+
+**Context:** Full writeup, including why the existing `RequestAccessModal.jsx` is NOT a
+starting point (it's disconnected legacy code — writes to `localStorage` only, hands out
+the shared `0000` bypass to everyone instead of minting real per-guest codes), is in
+`~/.gstack/projects/liaskin13-psoulc/codespace-main-design-20260814-113335.md`'s Open
+Question 3. Also needs: since no email/SMS infrastructure exists in this codebase, how
+D/L actually find out a new request is waiting — a console badge on next login is the
+obvious default, not yet confirmed. The entry gate's REQUEST ACCESS button
+(`EntrySequence.jsx:195-197`) is currently dead (no `onClick` at all) and stays that way
+until this is built — confirmed acceptable to leave as-is for now (2026-08-14).
+
+**Depends on:** A `/office-hours` or `/spec` session to shape the D1 schema and
+notification approach before building.
+
+---
+
+### Verify whether the console is usable on tablet width (768-1023px)
+
+**Priority:** Medium — D confirmed to actually use a tablet (2026-08-14), not
+speculative.
+**Blocked by:** Nothing.
+
+**What:** `useBreakpoint.js`'s `isMobile` is `false` for the `md` breakpoint
+(768-1023px, i.e. tablets) — so a tier-A (D/L) session on a tablet falls into the full
+desktop console today (`App.jsx:120`'s `tier === "A" && !isMobile` branch), not the
+guest room and not the new mobile GOD MODE MOBILE surface. Whether the full console is
+actually usable at that width was never verified either way — the 2026-08-14 `/qa`
+session that confirmed "console has zero mobile support" tested phone width specifically.
+
+**Why:** Surfaced during the `/plan-eng-review` of the GOD MODE MOBILE design doc
+(2026-08-14) as a pre-existing gap independent of that work. **Correction (same
+session): D does use a tablet** — this is not speculative, raising this from a
+theoretical gap to an actual, unverified user experience. Whether it's currently fine or
+currently broken has not been confirmed either way.
+
+**Context:** Needs a direct check with D on whether the desktop console is actually
+usable on his tablet today. If it's broken, this connects directly to the GOD MODE
+MOBILE design doc's `tier === "A" && isMobile` condition — worth revisiting whether tier-A
+sessions should get the lightweight mobile surface on tablet width too (`isTablet` from
+`useBreakpoint.js`), not just phone width.
+
+**Depends on:** Nothing technical.
+
+---
+
+### Recommended gstack skills — not yet used on this project
+
+**Priority:** Reference only, not a build task.
+
+Surfaced during the 2026-08-14 `/cso` audit session while mapping the TODO
+priority plan. None of these have been invoked on this project yet
+(confirmed via `~/.gstack/analytics/skill-usage.jsonl`); each maps to a
+specific gap already tracked elsewhere in this file.
+
+- **`/investigate`** — for the CI e2e login-wait flake (see "CI has been red
+  on main" below). Built specifically for root-causing "why is this broken"
+  rather than working around it.
+- **`/health`** — code quality dashboard. Worth running once before starting
+  the Vitest baseline (below) to get a coverage/quality snapshot to measure
+  against.
+- **`/spec`** — turns a vague product gap into a precise executable spec.
+  Both the ACCESS CODES panel above and "no way to clear a single hot cue"
+  (below) were flagged as needing a UX decision before building — this is
+  the tool for that step.
+- **`/canary`** — post-deploy canary monitoring. Deploys here are 100%
+  manual (`wrangler`, no CI/CD auto-deploy) — lightweight automated
+  post-deploy health checks would close a real gap cheaply.
+- **`/retro`** — weekly engineering retrospective. `tasks/lessons.md` has
+  190+ entries accumulated over ~4 months; a periodic retro pass could
+  consolidate durable patterns and prune what's gone stale.
+
+---
+
+### HISTORY track-list filter button doesn't respond when switching from STAGED/LIVE
+
+**Priority:** Medium
+**Blocked by:** Nothing.
+
+**What:** Found during a `/qa` dogfooding pass on the PR2 downbeat-detection
+feature (2026-08-14) — unrelated to that feature, a pre-existing console bug.
+The HISTORY filter button in the track-list toolbar (`ArchitectConsole.jsx`)
+works correctly on fresh page load (it's the default view), but once you
+click away to STAGED or LIVE, clicking HISTORY again does nothing — the
+`active` CSS class stays on the previously-selected filter and the track
+rows never change. Verified at the DOM level, not just visually: dispatching
+`.click()` directly on the button element via JS still leaves `active` on
+the old filter, ruling out a browser-automation/selector issue.
+
+**Why:** Real, reproducible UX papercut — D can get stuck unable to see
+published/history tracks after browsing STAGED without a full page reload.
+Low risk (reload works around it) but worth a proper fix.
+
+**Context:** Likely a stale-closure or missing-dependency bug in whatever
+`useState`/`useCallback` handles the STAGED/LIVE/HISTORY filter toggle in
+`ArchitectConsole.jsx` — needs a source read of that handler before fixing,
+not yet investigated. Screenshots: `.gstack/qa-reports/screenshots/history-recheck.png`,
+`history-js-click.png`. Full QA report: `.gstack/qa-reports/qa-report-uoyni-com-2026-08-14.md`.
+
+**Depends on:** Nothing technical.
 
 ---
 
@@ -176,6 +347,8 @@ may differ.
 
 **Related, broader scope (not yet its own TODO — needs shaping first):** L separately asked to consider a full review of all console buttons/controls — their functionality, discoverability (hints/tooltips), and whether the COMMS status LCD (`announceStatus()`, added 2026-07-22 session, sibling to the REACH LCD) is being used to its full intended potential for surfacing this kind of state/feedback. Worth a dedicated `/design-review` or `/office-hours` pass rather than folding into a single-cue-clear fix — the single-cue-clear gap is a good concrete example to bring INTO that review, not a substitute for it.
 
+**Update 2026-08-14:** first concrete instance of this now planned (not yet built) — see "Build the COMMS-box keyword-help system (BEATGRID v1)" at the top of this file.
+
 **Depends on:** Nothing technical. Needs a UX decision (with L/D) before building.
 
 ---
@@ -225,21 +398,39 @@ may differ.
 
 ---
 
-### CI has been red on main since at least 2026-07-28 — two separate causes, one fixed
+### ~~CI has been red on main since at least 2026-07-28~~ — RESOLVED 2026-08-14
 
-**Priority:** Medium
-**Blocked by:** Nothing.
+**Status: fixed and verified against real CI**, not just local repro — see
+`.github/workflows/ci.yml`'s `e2e-smoke` job and `/investigate` session
+2026-08-14. Both original causes are now closed:
 
-**What:** `/land-and-deploy`'s CI gate (first time this project actually checked CI status before merging, rather than merging through the GitHub UI/CLI regardless) surfaced that CI has been failing on every push to `main` since at least 2026-07-28 — PRs #4 and #5 both merged with CI already red at merge time (confirmed via `gh run list` timestamps 2-3s after each merge commit). Two distinct causes:
+1. `react`/`react-dom` version mismatch — fixed via PR #9 (already closed
+   before this session).
+2. `tests/e2e/beatgrid.spec.js` 4/9 failures — **the "login wait timing"
+   theory in this entry's original text was wrong.** Real root cause:
+   `.env` is gitignored and was never present in CI, so
+   `VITE_UPLOAD_WORKER_URL` fell back to `http://localhost:8787`
+   (`src/config.js`), which flips `src/lib/tracks.js`'s `IS_DEV` flag true
+   and routes every track fetch through an empty `localStorage` — never
+   calling `fetch()` at all, completely bypassing the tests'
+   `page.route()` mocks. Confirmed directly with a standalone Playwright
+   script logging network activity: zero `/tracks` requests fired.
+   Fix: `.github/workflows/ci.yml`'s `e2e-smoke` job now sets
+   `VITE_UPLOAD_WORKER_URL` explicitly (the real worker URL — public, not
+   a secret) so `IS_DEV` is correctly false in CI, matching local dev
+   behavior. A first-attempt fix (waiting for a track row to render in
+   `fixtures/auth.js`) was tried, tested only via local CPU-contention
+   simulation, pushed, and made CI **worse** (4 failing → 9 failing) —
+   reverted in the same commit as the real fix. Verified against an
+   actual CI run afterward, not just local reproduction: both jobs green,
+   9/9 e2e tests passing — first fully-green CI run since at least
+   2026-07-28.
 
-1. `react`/`react-dom` version mismatch (**fixed**, see the "CI has been red" fix commit / PR #9) — `npm ci`'s strict lockfile replay hit a genuine version mismatch that a long-lived local `node_modules` was masking.
-2. `tests/e2e/beatgrid.spec.js` — 4 of 9 e2e-smoke tests fail on a timing issue, most likely related to `fixtures/auth.js`'s login wait, which its own code comment already documents as "an intermittent flake independent of the app itself." Confirmed the actual app logic (`ArchitectConsole.jsx` confidence-badge rendering, ~line 3460) is correct against the fixture data (`detected_bpm: 176`, `confidence: 0.32 < 0.6` threshold) — this is very likely a CI-runner timing/flake issue (5000ms Playwright timeout), not a real regression. Not fixed — landed PR #9 past it via `gh pr merge --admin` since it's unrelated to that PR's content (package.json/package-lock.json only).
-
-**Why:** Neither cause is caused by any of today's PRs (#6/#7/#8/#9) — both predate this session by at least 2 weeks. Worth fixing so CI is actually trustworthy going forward, since branch protection isn't configured to strictly require these checks (mergeStateStatus was `UNSTABLE`, not `BLOCKED`), meaning broken CI has been silently non-blocking this whole time.
-
-**Context:** For #2, the fix is likely either raising the Playwright assertion timeout on this specific page, or adding an explicit `waitForLoadState`/network-idle wait after `mockTracksApi(page)` + `loginToConsole(page)` before asserting on rendered content, rather than relying on the default 5s `toHaveText` timeout. Should be re-tested with several repeated CI runs (not just one) before considering it actually fixed, since flaky failures don't reproduce every time.
-
-**Depends on:** Nothing technical.
+**Lesson for next time:** when a CI-only failure can't be explained by app
+logic, check whether a gitignored config file is silently absent in CI and
+whether the app has a fallback branch that changes *behavior* (not just a
+missing value) based on that absence. Also: never consider a CI-flake fix
+confirmed from local simulation alone — verify against a real CI run.
 
 ---
 
@@ -329,6 +520,41 @@ existing lesson) is the obvious first experiment.
 
 **Depends on:** Nothing technical — needs someone to actually reproduce and
 diagnose it instead of bypassing on sight.
+
+---
+
+### ContextStrip.css declares `'JetBrains Mono'` for COMMS/REACH text, but it's never loaded
+
+**Priority:** Low
+**Blocked by:** Nothing.
+
+**What:** `.arch-comms-lcd-status`, `.arch-context-search-input`,
+`.arch-context-search-count`, `.arch-reach-lcd-msg`, `.arch-reach-lcd-idle`,
+and `.arch-context-loop-btn`/`.arch-context-placeholder` all set
+`font-family: 'JetBrains Mono', monospace` — but `index.html` only loads
+Chakra Petch, Comfortaa, and Space Mono via Google Fonts. No crash (the
+`monospace` fallback catches it), but every COMMS/REACH readout has been
+silently rendering in the browser's generic monospace font, not the intended
+one, for as long as `ContextStrip.jsx` has existed.
+
+**Why:** Surfaced while exploring `ContextStrip.jsx`/`.css` for the
+COMMS-box keyword-help feature (2026-08-14). Also a DESIGN.md law violation
+independent of the missing font file: `DESIGN.md`'s typography law reserves
+Space Mono for exactly 3 numeric-data-readout surfaces (transport, BPM
+nixie, telemetry timestamps) and Chakra Petch for everything else — none of
+these COMMS/REACH surfaces are numeric readouts, so even loading JetBrains
+Mono properly wouldn't be the DESIGN.md-correct fix.
+
+**Context:** Real fix is likely switching these rules to `Chakra Petch` (per
+DESIGN.md's actual law), not adding a new Google Fonts `<link>` for a font
+DESIGN.md never sanctions. Also worth noting: neither COMMS nor REACH is
+documented in DESIGN.md at all today (zero mentions) — this fix should
+probably come with adding a short section for them, not just a CSS swap.
+
+**Depends on:** Nothing technical. Visual-only, worth a screenshot check
+against DESIGN.md before changing (per this repo's standing rule: never
+touch CSS without reading DESIGN.md first, never ship visual changes without
+a screenshot).
 
 ---
 

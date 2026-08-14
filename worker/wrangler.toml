@@ -14,6 +14,17 @@ database_id = "1babb698-2162-449d-a36e-c8476f85fc91"
 binding = "PSC_AUDIO"
 bucket_name = "psc-audio"
 
+# Rate limit on POST /redeem — closes the null-fingerprint device-binding
+# bypass (an unauthenticated caller can omit "fingerprint" from the request
+# body entirely) and the pre-existing, unrelated gap of zero rate limiting
+# against brute-forcing the 4-digit code space. Requires Wrangler 4.36+.
+[[ratelimits]]
+name = "REDEEM_RATE_LIMITER"
+namespace_id = "1002"
+[ratelimits.simple]
+limit = 20
+period = 60
+
 # Environment variables
 [vars]
 # R2_PUBLIC_URL will be set as a secret

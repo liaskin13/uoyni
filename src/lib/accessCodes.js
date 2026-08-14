@@ -6,17 +6,22 @@ function authHeaders(extra = {}) {
 }
 
 function getOrCreateFingerprint() {
-  let id = sessionStorage.getItem("psc_fp");
+  // localStorage, not sessionStorage: this fingerprint identifies "this
+  // device" for access-code binding, and must survive tab/browser close —
+  // a fingerprint that resets every session would eventually reject the
+  // legitimate holder, not just a stranger with the same code.
+  let id = localStorage.getItem("psc_fp");
   if (!id) {
     id = crypto.randomUUID();
-    sessionStorage.setItem("psc_fp", id);
+    localStorage.setItem("psc_fp", id);
   }
   return id;
 }
 
 // Validate a listener access code.
 // Returns { valid, tier, grantedTo, identityColor } on success.
-// Throws with .status 404 (unknown) or 410 (expired/revoked).
+// Throws with .status 404 (unknown), 409 (claimed by another device), or
+// 410 (expired/revoked).
 export async function redeemCode(code) {
   const fingerprint = getOrCreateFingerprint();
   const res = await fetch(`${UPLOAD_WORKER_URL}/redeem`, {
@@ -25,6 +30,7 @@ export async function redeemCode(code) {
     body: JSON.stringify({ code, fingerprint }),
   });
   if (res.status === 404) throw Object.assign(new Error("Code not found"), { status: 404 });
+  if (res.status === 409) throw Object.assign(new Error("Code already claimed by another device"), { status: 409 });
   if (res.status === 410) throw Object.assign(new Error("Code expired or revoked"), { status: 410 });
   if (!res.ok) throw Object.assign(new Error("Redemption failed"), { status: res.status });
   return res.json();

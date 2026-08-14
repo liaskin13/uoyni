@@ -15,6 +15,7 @@ import CommandPalette from "./components/CommandPalette";
 // ── LAZY IMPORTS ─────────────────────────────────────────────────────────────
 const ArchitectConsole = lazy(() => import("./console/ArchitectConsole"));
 const ListenerShell = lazy(() => import("./listener/ListenerShell"));
+const GodModeMobile = lazy(() => import("./console/GodModeMobile"));
 const WaveformSandbox = lazy(() => import("./components/WaveformSandbox"));
 
 const UploadModal = lazy(() => import("./components/UploadModal"));
@@ -86,7 +87,14 @@ function App() {
     if (isMobile && (stage === "console" || stage === "architect")) {
       setStage("room");
     }
-  }, [isMobile, stage]);
+    // Mirror image: GOD MODE MOBILE only makes sense on mobile — if the
+    // viewport grows past the mobile breakpoint mid-session (external
+    // monitor, tablet rotation), fall back to the real desktop console
+    // rather than leaving a phone-only screen stranded on a desktop viewport.
+    if (!isMobile && stage === "godmode-mobile") {
+      setStage(consoleOwner === "L" ? "architect" : "console");
+    }
+  }, [isMobile, stage, consoleOwner]);
 
   useEffect(() => {
     const handleOpenUploadModal = () => setShowUploadModal(true);
@@ -116,10 +124,14 @@ function App() {
     batchUpload.reset();
     setUploadVault(null);
 
-    // Tier-based routing — Masters on mobile go to room (listener mode)
+    // Tier-based routing — Masters on desktop get their full console; on mobile
+    // they get GOD MODE MOBILE (access-code quick-grant only, not the console
+    // made responsive — see DESIGN.md's named exception, 2026-08-14)
     if (tier === "A" && !isMobile) {
       if (ownerVal === "L") setStage("architect");
       else setStage("console");
+    } else if (tier === "A" && isMobile) {
+      setStage("godmode-mobile");
     } else {
       setStage("room");
       // Auto-focus vault if assigned
@@ -196,6 +208,22 @@ function App() {
   // ── CONSOLE MOBILE GUARD — safety net, routing handles this at login ─────
   if (isMobile && (stage === "console" || stage === "architect")) {
     return null;
+  }
+  // ── GOD MODE MOBILE GUARD — mirror image, safety net for the reverse case ─
+  if (!isMobile && stage === "godmode-mobile") {
+    return null;
+  }
+
+  // ── GOD MODE MOBILE — D/L access-code quick-grant, phone-only ────────────
+  if (stage === "godmode-mobile") {
+    return (
+      <>
+        {offlineBanner}
+        <Suspense fallback={null}>
+          <GodModeMobile owner={owner} onPowerDown={handlePowerDown} />
+        </Suspense>
+      </>
+    );
   }
 
   // ── L's CONSOLE — GOD MODE PLUS (sovereign root) ──────────────────────────

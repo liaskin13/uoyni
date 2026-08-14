@@ -1,0 +1,365 @@
+/* GOD MODE MOBILE — D/L access-code quick-grant, phone-only.
+   Named exception to "console mobile optimization is out of scope" —
+   see DESIGN.md's Layout section, 2026-08-14. This is a new, narrow
+   surface, not ArchitectConsole/ContextStrip made responsive. */
+
+.gmm-root {
+  min-height: 100vh;
+  background: var(--void);
+  color: var(--text-primary);
+  font-family: var(--font-primary);
+  display: flex;
+  flex-direction: column;
+}
+
+.gmm-header {
+  height: 44px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--sp-5);
+}
+
+.gmm-header-label {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.gmm-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+
+.gmm-owner-badge {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--identity);
+  border: 1px solid var(--identity);
+  padding: 2px 8px;
+}
+
+.gmm-exit-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-family: var(--font-primary);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.gmm-content {
+  padding: var(--sp-5);
+  flex: 1;
+}
+
+.gmm-section-title {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--sp-3);
+  margin-bottom: var(--sp-4);
+  margin-top: var(--sp-6);
+}
+
+.gmm-content section:first-child .gmm-section-title {
+  margin-top: 0;
+}
+
+.gmm-field {
+  margin-bottom: var(--sp-4);
+}
+
+.gmm-field-label {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: var(--sp-2);
+}
+
+.gmm-input {
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: var(--font-primary);
+  font-size: 14px;
+  padding: var(--sp-4);
+  min-height: 44px;
+}
+
+.gmm-input:focus {
+  outline: none;
+  border-color: var(--identity);
+}
+
+.gmm-defaults-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-3) 0;
+  margin-bottom: var(--sp-3);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.gmm-change-link {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-primary);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-style: dotted;
+  min-height: 44px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.gmm-tier-row {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.gmm-tier-btn {
+  flex: 1;
+  min-height: 44px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-family: var(--font-primary);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.gmm-tier-btn.gmm-active {
+  border-color: var(--identity);
+  color: var(--identity);
+  box-shadow: var(--identity-glow);
+}
+
+.gmm-generate-btn {
+  width: 100%;
+  min-height: 48px;
+  background: transparent;
+  border: 1px solid var(--identity);
+  color: var(--identity);
+  font-family: var(--font-primary);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-top: var(--sp-2);
+}
+
+.gmm-generate-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.gmm-inline-error {
+  display: block;
+  margin-top: var(--sp-3);
+  color: var(--error-text);
+  background: var(--error-surface);
+  border: 1px solid var(--error-text);
+  padding: var(--sp-3);
+  font-size: 11px;
+}
+
+.gmm-result-panel {
+  border: 1px solid var(--identity);
+  padding: var(--sp-6);
+  text-align: center;
+  margin-top: var(--sp-6);
+}
+
+.gmm-result-label {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: var(--sp-4);
+}
+
+.gmm-result-code {
+  font-family: var(--font-mono);
+  font-size: 32px;
+  letter-spacing: 0.1em;
+  color: var(--text-primary);
+  margin-bottom: var(--sp-5);
+}
+
+.gmm-qr-frame {
+  width: 140px;
+  height: 140px;
+  margin: 0 auto var(--sp-4);
+  border: 1px solid var(--border);
+  background: #fff;
+  padding: var(--sp-3);
+}
+
+.gmm-qr-canvas {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  display: block;
+}
+
+.gmm-result-hint {
+  font-size: 9px;
+  color: var(--text-secondary);
+  letter-spacing: 0.08em;
+}
+
+.gmm-skeleton-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.gmm-skeleton-row {
+  height: 52px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.gmm-empty-state,
+.gmm-list-error {
+  padding: var(--sp-7) var(--sp-5);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border: 1px dashed var(--border);
+}
+
+.gmm-list-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.gmm-list-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: var(--sp-4) 0;
+  border-bottom: 1px solid var(--border);
+  transition: opacity var(--dur-medium);
+}
+
+.gmm-list-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.gmm-list-row-name {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.gmm-list-row-meta {
+  font-size: 9px;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.gmm-revoke-btn {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 var(--sp-4);
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-family: var(--font-primary);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.gmm-revoke-btn:disabled {
+  opacity: 0.35;
+}
+
+.gmm-void-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(5, 5, 5, 0.94);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-6);
+  padding: var(--sp-7);
+  text-align: center;
+}
+
+.gmm-void-title {
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.gmm-void-sub {
+  font-size: 10px;
+  color: var(--text-secondary);
+  letter-spacing: 0.08em;
+  margin-top: var(--sp-2);
+}
+
+.gmm-void-actions {
+  display: flex;
+  gap: var(--sp-4);
+  width: 100%;
+  max-width: 280px;
+}
+
+.gmm-void-btn {
+  flex: 1;
+  min-height: 48px;
+  background: transparent;
+  font-family: var(--font-primary);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.gmm-void-cancel {
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.gmm-void-confirm {
+  border: 1px solid var(--record-red);
+  color: var(--record-red);
+}
+
+.gmm-void-confirm:disabled {
+  opacity: 0.5;
+}

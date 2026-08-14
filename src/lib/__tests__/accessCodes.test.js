@@ -6,7 +6,10 @@ vi.mock("../../config", () => ({
   UPLOAD_SECRET: "test-secret",
 }));
 
-beforeEach(() => sessionStorage.clear());
+beforeEach(() => {
+  sessionStorage.clear();
+  localStorage.clear();
+});
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.clearAllMocks();
@@ -56,6 +59,13 @@ describe("redeemCode", () => {
     expect(err.status).toBe(410);
   });
 
+  it("throws with status 409 for a code already claimed by another device", async () => {
+    mockFetch(409, { error: "Code already claimed by another device" });
+    const err = await redeemCode("taken-uuid").catch(e => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err.status).toBe(409);
+  });
+
   it("includes fingerprint in request body", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve(MOCK_REDEMPTION) });
     vi.stubGlobal("fetch", fetchMock);
@@ -65,7 +75,7 @@ describe("redeemCode", () => {
     expect(typeof body.fingerprint).toBe("string");
   });
 
-  it("sends the same fingerprint on repeated calls (sessionStorage stable)", async () => {
+  it("sends the same fingerprint on repeated calls (localStorage stable)", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve(MOCK_REDEMPTION) });
     vi.stubGlobal("fetch", fetchMock);
     await redeemCode("uuid-1");
@@ -73,6 +83,23 @@ describe("redeemCode", () => {
     const fp1 = JSON.parse(fetchMock.mock.calls[0][1].body).fingerprint;
     const fp2 = JSON.parse(fetchMock.mock.calls[1][1].body).fingerprint;
     expect(fp1).toBe(fp2);
+  });
+
+  it("keeps the same fingerprint across a simulated tab/session close (localStorage, not sessionStorage)", async () => {
+    // This is the actual point of the sessionStorage -> localStorage
+    // migration: sessionStorage.clear() (what a real tab close does) must
+    // NOT rotate the fingerprint, or single-device binding would eventually
+    // reject the legitimate holder after their 20-day session expires.
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve(MOCK_REDEMPTION) });
+    vi.stubGlobal("fetch", fetchMock);
+    await redeemCode("uuid-1");
+    const fp1 = JSON.parse(fetchMock.mock.calls[0][1].body).fingerprint;
+
+    sessionStorage.clear(); // simulates closing the tab/browser
+
+    await redeemCode("uuid-2");
+    const fp2 = JSON.parse(fetchMock.mock.calls[1][1].body).fingerprint;
+    expect(fp2).toBe(fp1);
   });
 
   it("POSTs to /redeem with the code in the body", async () => {

@@ -156,6 +156,7 @@ DPWallpaper canvas:  position: fixed, z-index: 0   (page level — paints first)
 - **Console layout:** Full-bleed dark surface, controls justified to a strict 4px grid. Dense, purposeful, no wasted space.
 - **Device targets:** Listener view = iPhone primary. D/L consoles = desktop/laptop primary.
 - **Console mobile scope:** The D-sovereign and L-sovereign console views are explicitly desktop/laptop-only. Touch targets follow desktop sizing. Mobile breakpoints on the console only handle library column hiding. The Listener Shell is the mobile-first surface — console mobile optimization is out of scope.
+- **GOD MODE MOBILE (named exception, 2026-08-14):** A single, narrow, mobile-first surface for tier-A (D/L) sessions authenticating on a phone — access-code generation only (generate/list/revoke, QR display). This is NOT the console made responsive; `ArchitectConsole`/`ContextStrip` remain desktop-only per the rule above, unchanged. It exists because D/L explicitly need to grant access from their phones — a real, confirmed need distinct from "optimize the DJ console for mobile." Touch targets follow the mobile minimum (44px, per the `god-btn` mobile spec below), not desktop sizing.
 
 ---
 
@@ -504,6 +505,7 @@ INTAKE is a console-level action. The button lives in the browser utility bar (`
 | 2026-07-24 | Beatgrid anchor idle color = rgba(240,237,232,0.55), same token as unplayed waveform bars | One off-white token for "present but not active" across the whole waveform surface, not a new value invented per element. |
 | 2026-07-24 | Beat/cue grid metadata is console-only, never guest-facing | Same rule as Serato cue labels — D's internal production data, not guest content. |
 | 2026-08-12 | PUBLISH-selection checkbox enlarged 10px→14px, wired to `--arch-muted-rgb`/`--arch-identity` instead of `--arch-accent-rgb` | Was using the wrong achromatic token — accent (labels/headers) instead of muted (structural/inactive controls) — so the checked state had no real identity-color contrast. Fixed alongside a tooltip when nothing is selected. Found via `/investigate`. |
+| 2026-08-14 | GOD MODE MOBILE named as a scoped exception to "console mobile optimization is out of scope" | D/L need to generate access codes from their phones — confirmed real, near-term. Kept narrow: one screen, one purpose, not the console made responsive. `ArchitectConsole`/`ContextStrip` stay desktop-only, unchanged. Caught during `/plan-design-review` — the design doc had been through `/office-hours` and `/plan-eng-review` before DESIGN.md was read this session. |
 
 ---
 

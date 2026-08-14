@@ -40,13 +40,14 @@ const LISTENER_VAULTS_FALLBACK = [
 
 // ── CODE GATE — renders before vault when an access code is present ──────────
 function CodeGate({ code, onGranted }) {
-  const [status, setStatus] = useState("loading"); // loading | error-404 | error-410 | error-unknown
+  const [status, setStatus] = useState("loading"); // loading | error-404 | error-409 | error-410 | error-unknown
 
   useEffect(() => {
     redeemCode(code)
       .then((data) => onGranted(data))
       .catch((err) => {
         if (err.status === 404) setStatus("error-404");
+        else if (err.status === 409) setStatus("error-409");
         else if (err.status === 410) setStatus("error-410");
         else setStatus("error-unknown");
       });
@@ -56,6 +57,7 @@ function CodeGate({ code, onGranted }) {
   const messages = {
     loading: null,
     "error-404": "THIS LINK DOESN'T EXIST",
+    "error-409": "ALREADY CLAIMED ON ANOTHER DEVICE",
     "error-410": "THIS LINK HAS EXPIRED",
     "error-unknown": "SOMETHING WENT WRONG",
   };

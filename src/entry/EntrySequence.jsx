@@ -119,7 +119,13 @@ function EntrySequence({ onIgnite }) {
         writeLock(newLock);
         if (newLock.lockedUntil) setLockoutRemaining(GATE_LOCKOUT_MS);
         setCellState("wrong");
-        setErrMsg(err.status === 410 ? "CODE EXPIRED" : "ACCESS DENIED");
+        setErrMsg(
+          err.status === 410
+            ? "CODE EXPIRED"
+            : err.status === 409
+              ? "ALREADY CLAIMED"
+              : "ACCESS DENIED",
+        );
         setTimeout(() => {
           setDigits("");
           setCellState("idle");
