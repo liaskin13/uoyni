@@ -380,12 +380,17 @@ may differ.
 **Update 2026-08-15:** BEATGRID v1 shipped. This item now reduces to: run the
 console-wide button/control audit itself (still not scoped) — that audit is
 what should produce the next COMMS-help topics and inform whether/how HINTS
-surface in the still-unbuilt PR3 UI expansions (confidence heat-strip,
-explainability panel, cross-instrument pulse, validation-numbers panel — see
-the CEO plan `~/.gstack/projects/liaskin13-psoulc/ceo-plans/2026-08-11-genre-generalized-beat-detection.md`).
-Sequencing decided 2026-08-15: run this audit as its own dedicated pass
-(`/design-review` or `/office-hours`), separate from PR3's Design Review —
-they don't block each other.
+surface across the console more broadly.
+
+**Update 2026-08-15 (later same day):** PR3's confidence badge, tap-tempo,
+explainability row, and validation-numbers panel all shipped (v1.4.0.0) —
+each with its own COMMS keyword-help topic (`TAP`, `VALIDATION`, alongside
+`BEATGRID`) as a first-class part of that work, not deferred to this audit.
+T12 (cross-instrument pulse) remains its own separate, not-yet-shipped PR.
+This TODO's remaining scope is now specifically the console-wide
+button/control audit itself — everything else that referenced it has
+landed. Sequencing decided 2026-08-15: run this audit as its own dedicated
+pass (`/design-review` or `/office-hours`).
 
 **Depends on:** Nothing technical. Needs a UX decision (with L/D) before building.
 

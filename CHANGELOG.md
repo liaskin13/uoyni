@@ -2,6 +2,44 @@
 
 All notable changes to Pleasant Soul Collective will be documented in this file.
 
+## [1.4.0.0] - 2026-08-15
+
+### Added
+
+- **BPM confidence badge** on the loaded-deck header — shows detection
+  confidence as a colored `CONF NN%` tag (red → red-orange → green → cyan →
+  indigo across five confidence bands), the same badge already used in
+  track-list rows, now also visible on the deck you're actually playing
+- **Tap-tempo manual override** — a `TAP` control next to BPM/LIVE lets you
+  set tempo by tapping the beat by hand (4+ taps required; fewer shows
+  "keep tapping…"), with outlier-tap rejection so one mistimed tap doesn't
+  throw off the reading
+- **Onset-envelope explainability row** — hover the waveform to see the
+  actual detected onset trace for the beats around your cursor, so you can
+  see *why* the detector picked the tempo it did, not just trust the number
+- **Beat-detection validation numbers**, in both consoles' settings panels —
+  shows real "N/5 genres validated, ±70ms tolerance" numbers, generated
+  fresh from the exact code in every build (not a stale CI number)
+- **COMMS keyword-help** — type `BEATGRID`, `TAP`, or `VALIDATION` into the
+  console search box and press Enter for quick in-context instructions
+
+### Fixed
+
+- Tap-tempo could compute an "Infinity" BPM from a degenerate all-zero-
+  interval tap gesture and PATCH that literal string to a track's BPM —
+  now falls back to the normal "keep tapping…" state instead
+- A mid-gesture tap count or hover position from a previously loaded track
+  could bleed into a newly loaded one — both now reset on every deck switch
+- The onset-envelope row redrew its canvas's full backing store on every
+  mouse movement over the waveform instead of only on an actual resize —
+  fixed for smoother hovering
+
+### Infrastructure
+
+- CI's e2e-smoke job now generates the validation-numbers build artifact
+  before running Playwright, so tests that check it see real numbers
+  instead of always hitting the "pending" fallback
+
 ## [1.3.0.0] - 2026-08-14
 
 ### Added
