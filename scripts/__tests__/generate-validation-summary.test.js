@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterEach, afterAll } from "vitest";
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, unlinkSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -22,8 +22,24 @@ const outPath = resolve(__dirname, "../../public/validationSummary.json");
 // to the wrong location and this test would read stale data instead.
 const failingScriptPath = resolve(__dirname, "../__generate-validation-summary-forced-fail.tmp.js");
 
+// The second test below deliberately forces a failing run, which overwrites
+// the REAL public/validationSummary.json with fabricated failing data
+// before exiting — that's the artifact npm run dev/build serves. Without
+// restoring it, a local `npm test` run leaves the app showing a false
+// "genres failing" state until the next real build. Found by /ship's
+// testing specialist, 2026-08-15.
+let originalOutContent;
+
+beforeAll(() => {
+  originalOutContent = existsSync(outPath) ? readFileSync(outPath, "utf8") : null;
+});
+
 afterEach(() => {
   if (existsSync(failingScriptPath)) unlinkSync(failingScriptPath);
+});
+
+afterAll(() => {
+  if (originalOutContent != null) writeFileSync(outPath, originalOutContent);
 });
 
 describe("generate-validation-summary.js (subprocess)", () => {

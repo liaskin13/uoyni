@@ -3,7 +3,7 @@ import { loginToConsole } from "./fixtures/auth.js";
 import { mockTracksApi, FIXTURE_TRACKS } from "./fixtures/mockTracks.js";
 
 // T11 — onset-envelope explainability row. The window/cursor math has
-// dedicated unit tests (src/console/__tests__/envelopeWindow.test.js) —
+// dedicated unit tests (src/console/__tests__/computeEnvelopeWindow.test.js) —
 // these specs verify the row itself is wired end-to-end: always present,
 // idle hint, "unavailable" for tracks with no resolvable BPM, and that
 // hovering the waveform actually redraws the canvas (checked via a

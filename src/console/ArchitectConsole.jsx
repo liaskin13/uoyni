@@ -714,6 +714,13 @@ function ArchitectConsole({
   const envelopeCanvasRef = useRef(null);
   const envelopeCacheRef = useRef({ trackId: null, envelope: null });
   const envelopeHoverRef = useRef(null); // hovered time in seconds, or null when idle
+  // Backing-store size (CSS width + dpr) last applied to the canvas.
+  // drawEnvelopeRow() reassigns canvas.width/height only when this actually
+  // changes — reassigning on every call (this row redraws on every native
+  // mousemove over the waveform) forces a full canvas reset each time,
+  // needlessly expensive at mouse-event rates. Found by /ship's performance
+  // specialist, 2026-08-15.
+  const envelopeCanvasSizeRef = useRef({ w: 0, dpr: 0 });
   const [overviewStyle, setOverviewStyle] = useState(0); // 0=LAYERS 1=OUTLINE 2=TRACES
   const OVERVIEW_STYLES = ['LAYERS', 'OUTLINE', 'TRACES'];
   const stepOverviewStyle = (dir) =>
@@ -2651,11 +2658,18 @@ function ArchitectConsole({
     if (!canvas) return;
     const dpr = window.devicePixelRatio || 1;
     const w = canvas.getBoundingClientRect().width || 800;
-    canvas.width = Math.round(w * dpr);
-    canvas.height = Math.round(ENVELOPE_ROW_H * dpr);
     const ctx = canvas.getContext("2d");
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.scale(dpr, dpr);
+    const prevSize = envelopeCanvasSizeRef.current;
+    if (prevSize.w !== w || prevSize.dpr !== dpr) {
+      // Only touch the backing store on a genuine size change (mount,
+      // window resize) — reassigning canvas.width/height resets the whole
+      // bitmap and context transform even when the value is unchanged.
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(ENVELOPE_ROW_H * dpr);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
+      envelopeCanvasSizeRef.current = { w, dpr };
+    }
     ctx.clearRect(0, 0, w, ENVELOPE_ROW_H);
 
     const drawHint = (text) => {
@@ -2948,7 +2962,7 @@ function ArchitectConsole({
                   getAudioLatency={loadedTrack?.id === deckTrack?.id ? () => { const ctx = audioEngine.getAudioContext(); return ctx ? (ctx.outputLatency || 0) + (ctx.baseLatency || 0) : 0; } : null}
                   beatGridPoints={parseBeatGridPoints(deckTrack.beat_grid_points)}
                   onBeatGridPointsChange={(pts) => handleBeatGridPointsChange(deckTrack, pts)}
-                  identityColor={isD ? "#14dc14" : "#00e5ff"}
+                  identityColor={envelopeIdentityColor}
                   onHoverTime={handleEnvelopeHover}
                 />
               )}
