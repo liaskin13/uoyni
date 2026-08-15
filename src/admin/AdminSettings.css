@@ -172,6 +172,15 @@
   color: rgba(240, 237, 232, 0.68);
 }
 
+/* T13 — read-only info value (validation numbers), not a toggle button. */
+.adm-row-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.42);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── TOGGLES ── */
 .adm-toggle {
   background: linear-gradient(145deg, rgba(255,255,255,0.04) 0%, rgba(0,0,0,0.18) 100%);

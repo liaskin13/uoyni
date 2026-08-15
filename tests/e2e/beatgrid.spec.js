@@ -82,3 +82,25 @@ test("clicking the double-BPM octave button updates the displayed confidence bad
 
   await expect.poll(() => patchBody).toEqual({ detected_bpm: 352 });
 });
+
+// T9 — the same CONF badge, now also built onto the loaded-deck header
+// (arch-deck-stats), completing the gap DESIGN.md already specced but that
+// was previously only wired into track-list rows (tests above this point).
+test("deck header shows the CONF badge, colored by confidence band, for the loaded track", async ({ page }) => {
+  const row = page.locator(".arch-track-row", { hasText: "HIGH CONFIDENCE DETECTED" });
+  await row.dblclick();
+
+  const deckBadge = page.locator(".arch-deck-stats .arch-detected-bpm-badge");
+  await expect(deckBadge).toBeVisible();
+  await expect(deckBadge).toContainText("85%");
+  // 0.85 confidence → 80-90% band → cyan (#00ffff), per DESIGN.md's
+  // discrete-band table — verifies the color, not just the number.
+  await expect(deckBadge).toHaveCSS("color", "rgb(0, 255, 255)");
+});
+
+test("deck header hides the CONF badge for a track with manual BPM entered", async ({ page }) => {
+  const row = page.locator(".arch-track-row", { hasText: "MANUAL BPM TRACK" });
+  await row.dblclick();
+
+  await expect(page.locator(".arch-deck-stats .arch-detected-bpm-badge")).toHaveCount(0);
+});
