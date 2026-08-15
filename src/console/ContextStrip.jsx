@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import DirectLinePanel from "./DirectLinePanel.jsx";
+import { HELP_TOPICS } from "./helpTopics.js";
 import "./ContextStrip.css";
 
 export default function ContextStrip({
@@ -18,6 +19,7 @@ export default function ContextStrip({
 }) {
   const [activeContext, setActiveContext] = useState(null);
   const [reachTrigger, setReachTrigger] = useState(0);
+  const [helpTopicId, setHelpTopicId] = useState(null);
 
   useEffect(() => {
     if (externalLoopOpen > 0) setActiveContext("loop");
@@ -25,9 +27,19 @@ export default function ContextStrip({
 
   const latestMsg = reachMessages.find((m) => !m.read) || reachMessages[0] || null;
   const hasUnread = reachMessages.some((m) => !m.read);
+  const matchedTopic = HELP_TOPICS[libSearch.trim().toUpperCase()];
 
   function toggle(ctx) {
     setActiveContext((prev) => (prev === ctx ? null : ctx));
+  }
+
+  function handleSearchKeyDown(e) {
+    if (e.key === "Enter" && matchedTopic) {
+      setHelpTopicId(libSearch.trim().toUpperCase());
+      setActiveContext("help");
+    } else if (e.key === "Escape" && activeContext === "help") {
+      setActiveContext(null);
+    }
   }
 
   function handleReach() {
@@ -68,8 +80,12 @@ export default function ContextStrip({
                 placeholder="SEARCH VAULT"
                 value={libSearch}
                 onChange={(e) => onSearchChange?.(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
                 aria-label="Search tracks"
               />
+              {matchedTopic && (
+                <span className="arch-context-search-hint">⏎ HELP</span>
+              )}
               {libSearch && matchCount != null && (
                 <span className="arch-context-search-count">
                   {matchCount} MATCH{matchCount === 1 ? "" : "ES"}
@@ -159,6 +175,16 @@ export default function ContextStrip({
           {activeContext === "access" && viewer === "L" && (
             <div className="arch-context-placeholder">
               <span>ACCESS CODE MANAGEMENT — COMING SOON</span>
+            </div>
+          )}
+          {activeContext === "help" && helpTopicId && HELP_TOPICS[helpTopicId] && (
+            <div className="arch-context-help">
+              <span className="arch-context-help-label">{HELP_TOPICS[helpTopicId].label}</span>
+              <ul className="arch-context-help-lines">
+                {HELP_TOPICS[helpTopicId].lines.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
             </div>
           )}
         </div>
