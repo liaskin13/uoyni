@@ -51,4 +51,31 @@ describe("computeTapTempoBpm", () => {
     const bpm = computeTapTempoBpm([0, 100, 5000, 5200, 12000]);
     expect(Number.isFinite(bpm)).toBe(true);
   });
+
+  // Regression: zero-interval taps (every tap landing on the same
+  // millisecond — a real risk from rapid/duplicate synthetic click events,
+  // not just a contrived input) produced a zero-ms median, so
+  // 60000/avgMs === Infinity. That flowed straight into applyTapTempo(),
+  // which does String(bpm) before PATCHing bpm_display to the server —
+  // meaning a degenerate gesture could write the literal string "Infinity"
+  // to a real track's BPM. Found by /ship's coverage audit, 2026-08-15.
+  it("returns null (not Infinity) for zero-interval taps, never crossing into applyTapTempo", () => {
+    expect(computeTapTempoBpm([0, 0, 0, 0])).toBeNull();
+    expect(computeTapTempoBpm([100, 100, 100, 100])).toBeNull();
+  });
+
+  it("returns null rather than Infinity/NaN for any degenerate all-outlier-rejected case", () => {
+    // Even if a future change to the outlier-rejection window ever let every
+    // interval get filtered out, avgMs must never reach 0 undetected —
+    // assert the invariant directly rather than one specific input shape.
+    const cases = [
+      [0, 0, 0, 0],
+      [0, 0, 1, 1],
+      [5, 5, 5, 5, 5],
+    ];
+    for (const taps of cases) {
+      const bpm = computeTapTempoBpm(taps);
+      expect(bpm === null || Number.isFinite(bpm)).toBe(true);
+    }
+  });
 });

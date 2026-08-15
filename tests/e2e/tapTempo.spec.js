@@ -90,3 +90,76 @@ test("COMMS TAP topic opens correctly, same behavior as BEATGRID", async ({ page
   await search.press("Enter");
   await expect(page.getByText("Needs at least 4 taps", { exact: false })).toBeVisible();
 });
+
+test("a failed PATCH rolls back the optimistic BPM update and shows an error", async ({ page }) => {
+  await page.route("**/tracks/9002", async (route) => {
+    if (route.request().method() === "PATCH") {
+      return route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ success: false }) });
+    }
+    return route.fallback();
+  });
+
+  const row = page.locator(".arch-track-row", { hasText: "HIGH CONFIDENCE DETECTED" });
+  await row.dblclick();
+
+  const tapBtn = page.locator(".arch-tap-tempo-btn");
+  for (let i = 0; i < 4; i++) {
+    await tapBtn.click();
+    if (i < 3) await page.waitForTimeout(500);
+  }
+
+  // Optimistic update lands first, then the failed PATCH rolls it back to
+  // whatever it was before (this fixture track has no bpm_display set).
+  const listedRow = page.locator(".arch-track-row", { hasText: "HIGH CONFIDENCE DETECTED" });
+  await expect(listedRow.locator(".arch-detected-bpm-badge")).toBeVisible({ timeout: 4000 }); // CONF badge only shows without a manual bpm_display — proves the rollback happened
+
+  const errorStatus = page.locator(".arch-comms-lcd.status-error");
+  await expect(errorStatus).toBeVisible();
+  await expect(errorStatus).toContainText("Tap-tempo save failed");
+});
+
+test("a successful tap-tempo apply increments the localStorage usage counter", async ({ page }) => {
+  await page.evaluate(() => localStorage.removeItem("psc_tap_tempo_uses"));
+
+  const row = page.locator(".arch-track-row", { hasText: "HIGH CONFIDENCE DETECTED" });
+  await row.dblclick();
+
+  const tapBtn = page.locator(".arch-tap-tempo-btn");
+  for (let i = 0; i < 4; i++) {
+    await tapBtn.click();
+    if (i < 3) await page.waitForTimeout(500);
+  }
+
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("psc_tap_tempo_uses")), { timeout: 4000 })
+    .toBe("1");
+
+  // A second successful gesture increments again, not resets.
+  await page.waitForTimeout(2100); // clear the first gesture's idle window
+  for (let i = 0; i < 4; i++) {
+    await tapBtn.click();
+    if (i < 3) await page.waitForTimeout(500);
+  }
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("psc_tap_tempo_uses")), { timeout: 4000 })
+    .toBe("2");
+});
+
+test("switching decks mid-gesture clears the previous track's tap count and hover state", async ({ page }) => {
+  const trackA = page.locator(".arch-track-row", { hasText: "HIGH CONFIDENCE DETECTED" });
+  await trackA.dblclick();
+
+  const tapBtn = page.locator(".arch-tap-tempo-btn");
+  await tapBtn.click();
+  await tapBtn.click();
+  await expect(tapBtn).toHaveText("TAP · 2");
+
+  // Switch decks mid-gesture, without letting it idle out.
+  const trackB = page.locator(".arch-track-row", { hasText: "MANUAL BPM TRACK" });
+  await trackB.dblclick();
+
+  // The new deck's TAP button must start fresh, not inherit "· 2" from
+  // the track that was abandoned mid-gesture (coverage-audit finding,
+  // 2026-08-15 — state used to live outside any per-track scope).
+  await expect(page.locator(".arch-tap-tempo-btn")).toHaveText("TAP");
+});

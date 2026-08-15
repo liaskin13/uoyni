@@ -6,7 +6,10 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    include: ["src/**/__tests__/**/*.test.{js,ts}"],
+    include: [
+      "src/**/__tests__/**/*.test.{js,ts}",
+      "scripts/**/__tests__/**/*.test.{js,ts}",
+    ],
     exclude: ["node_modules", "gstack", "skills"],
     coverage: {
       provider: "v8",

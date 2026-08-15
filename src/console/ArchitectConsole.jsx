@@ -227,9 +227,14 @@ function ConfBadge({ confidence }) {
 export const TAP_MIN_TAPS = 4;
 
 // T10 — converts a tap gesture's raw timestamps (ms, any monotonic clock) to
-// a BPM, or null if there aren't enough taps yet. Outlier rejection: any
-// interval outside 50-150% of the running median is discarded before
-// averaging, so one fumbled extra/missed tap doesn't skew the result.
+// a BPM, or null if there aren't enough taps yet OR the taps carry no real
+// timing signal (e.g. zero-interval — every tap landed on the same
+// millisecond, which happens with rapid/duplicate synthetic events). Without
+// that guard, a zero-ms median divides 60000/0 = Infinity, which would then
+// get PATCHed to the server as bpm_display:"Infinity" — verified as a real,
+// reachable bug during /ship's coverage audit, not hypothetical. Outlier
+// rejection: any interval outside 50-150% of the running median is discarded
+// before averaging, so one fumbled extra/missed tap doesn't skew the result.
 // Extracted as a pure function so this math is unit-testable independent of
 // the gesture-timing/React-state plumbing in finalizeTapGesture.
 export function computeTapTempoBpm(taps) {
@@ -241,6 +246,7 @@ export function computeTapTempoBpm(taps) {
   const kept = intervals.filter((iv) => iv >= median * 0.5 && iv <= median * 1.5);
   const use = kept.length ? kept : intervals;
   const avgMs = use.reduce((a, b) => a + b, 0) / use.length;
+  if (!(avgMs > 0)) return null; // zero/negative/NaN — no real tempo signal
   return Math.round((60000 / avgMs) * 10) / 10;
 }
 
@@ -1024,6 +1030,17 @@ function ArchitectConsole({
       setLoadedDeckId(track.id);
       loadedDeckIdRef.current = track.id;
       setDeckHighResBars(null);
+      // T10/T11 — a mid-gesture tap count or a stale hover position from the
+      // PREVIOUS track must not bleed into the newly loaded one (coverage
+      // audit finding, 2026-08-15): the tap button would otherwise show a
+      // leftover "TAP · N" on a fresh track, and the envelope row could
+      // briefly draw the old track's data at the old hover position.
+      tapTimestampsRef.current = [];
+      if (tapIdleTimeoutRef.current) clearTimeout(tapIdleTimeoutRef.current);
+      if (tapHintTimeoutRef.current) clearTimeout(tapHintTimeoutRef.current);
+      setTapCount(0);
+      setTapHintVisible(false);
+      envelopeHoverRef.current = null;
       pushTrackHistory(track);
       setTrackPlayCounts((prev) => ({
         ...prev,
@@ -1067,6 +1084,17 @@ function ArchitectConsole({
       setLoadedDeckId(track.id);
       loadedDeckIdRef.current = track.id;
       setDeckHighResBars(null);
+      // T10/T11 — a mid-gesture tap count or a stale hover position from the
+      // PREVIOUS track must not bleed into the newly loaded one (coverage
+      // audit finding, 2026-08-15): the tap button would otherwise show a
+      // leftover "TAP · N" on a fresh track, and the envelope row could
+      // briefly draw the old track's data at the old hover position.
+      tapTimestampsRef.current = [];
+      if (tapIdleTimeoutRef.current) clearTimeout(tapIdleTimeoutRef.current);
+      if (tapHintTimeoutRef.current) clearTimeout(tapHintTimeoutRef.current);
+      setTapCount(0);
+      setTapHintVisible(false);
+      envelopeHoverRef.current = null;
       announce(`${track.title || "Track"} loaded to deck. Press PLAY.`);
       loadWaveformBinaryForDeck(track.id);
     } catch (err) {

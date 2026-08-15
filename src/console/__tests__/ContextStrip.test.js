@@ -143,6 +143,34 @@ describe("COMMS LCD — keyword help (BEATGRID v1)", () => {
     expect(screen.queryByText("[ and ] cycle which anchor is selected.")).toBeNull();
     expect(onSearchChange).not.toHaveBeenCalled();
   });
+
+  it("re-searching a different topic while the help body is already open switches to it", () => {
+    const { rerender } = renderStrip({ libSearch: "BEATGRID" });
+    const input = screen.getByPlaceholderText("SEARCH VAULT");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.getByText("[ and ] cycle which anchor is selected.")).toBeTruthy();
+
+    rerender(React.createElement(ContextStrip, { libSearch: "TAP" }));
+    fireEvent.keyDown(screen.getByPlaceholderText("SEARCH VAULT"), { key: "Enter" });
+    expect(screen.getByText("Needs at least 4 taps — fewer shows \"keep tapping…\" and resets.")).toBeTruthy();
+    expect(screen.queryByText("[ and ] cycle which anchor is selected.")).toBeNull();
+  });
+
+  it("Enter on a non-matching query is a true no-op — no panel opens", () => {
+    const { container } = renderStrip({ libSearch: "not a real topic" });
+    fireEvent.keyDown(screen.getByPlaceholderText("SEARCH VAULT"), { key: "Enter" });
+    expect(container.querySelector(".arch-context-help")).toBeNull();
+    expect(container.querySelector(".is-open")).toBeNull();
+  });
+
+  it("Escape on the search input does not close a different panel (e.g. nav) that's open", () => {
+    renderStrip({ libSearch: "BEATGRID" });
+    fireEvent.click(screen.getByLabelText("PSC navigation"));
+    expect(screen.getByText("VAULTS")).toBeTruthy();
+
+    fireEvent.keyDown(screen.getByPlaceholderText("SEARCH VAULT"), { key: "Escape" });
+    expect(screen.getByText("VAULTS")).toBeTruthy();
+  });
 });
 
 describe("COMMS LCD — keyword help (T10, TAP topic)", () => {

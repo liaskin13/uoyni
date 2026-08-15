@@ -71,7 +71,7 @@ function buildMinimalWav() {
   return buf; // remaining bytes are already zero (silence)
 }
 
-async function mockLoadableAudioTrack(page) {
+async function mockLoadableAudioTrack(page, { secondTrack = false } = {}) {
   // The double-click-to-load flow uses the track object already sitting in
   // trackListData (populated from the GET /tracks LIST response) — it does
   // NOT re-fetch GET /tracks/:id first. Overriding only the single-track
@@ -79,9 +79,16 @@ async function mockLoadableAudioTrack(page) {
   // audio_path. Registered after mockTracksApi's own /tracks route (in
   // beforeEach), so this one wins per Playwright's most-recently-registered-
   // runs-first route precedence.
-  const augmented = FIXTURE_TRACKS.map((t) =>
-    t.id === 9002 ? { ...t, audio_path: "fixture-9002.wav" } : t,
-  );
+  //
+  // secondTrack also gives track 9001 (MANUAL BPM TRACK, bpm_display "128")
+  // a loadable audio+waveform-bin path — its bpm_display resolves
+  // regardless of confidence, so it's a real second track with a genuinely
+  // resolvable BPM, for cross-track cache/hover re-keying tests.
+  const augmented = FIXTURE_TRACKS.map((t) => {
+    if (t.id === 9002) return { ...t, audio_path: "fixture-9002.wav" };
+    if (secondTrack && t.id === 9001) return { ...t, audio_path: "fixture-9001.wav" };
+    return t;
+  });
   await page.route("**/tracks", async (route) => {
     if (route.request().method() !== "GET") return route.fallback();
     return route.fulfill({
@@ -90,17 +97,25 @@ async function mockLoadableAudioTrack(page) {
       body: JSON.stringify(augmented),
     });
   });
+  const corsHeaders = { "Access-Control-Allow-Origin": "*" };
   await page.route("**/audio/fixture-9002.wav", async (route) => {
     // audioEngine.load() sets crossOrigin="anonymous" and the real
     // UPLOAD_WORKER_URL is a different origin than the dev server — needs
     // an explicit CORS header even though the request is fully intercepted.
-    return route.fulfill({
-      status: 200,
-      contentType: "audio/wav",
-      headers: { "Access-Control-Allow-Origin": "*" },
-      body: buildMinimalWav(),
-    });
+    return route.fulfill({ status: 200, contentType: "audio/wav", headers: corsHeaders, body: buildMinimalWav() });
   });
+  if (secondTrack) {
+    await page.route("**/audio/fixture-9001.wav", async (route) => {
+      return route.fulfill({ status: 200, contentType: "audio/wav", headers: corsHeaders, body: buildMinimalWav() });
+    });
+    await page.route("**/tracks/9001/waveform-bin", async (route) => {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/octet-stream",
+        body: synthesizeWaveformBinary(128), // different tempo than 9002's 122 -> visibly different trace
+      });
+    });
+  }
 }
 
 test("envelope row is always present, showing the idle hint before any hover", async ({ page }) => {
@@ -210,4 +225,51 @@ test("mouse leaving the waveform returns the row to its idle hint", async ({ pag
   await expect
     .poll(() => canvas.evaluate((el) => el.toDataURL()))
     .toBe(idleImage);
+});
+
+test("switching between two real-data tracks re-keys the envelope, doesn't bleed the old track's trace or hover position", async ({ page }) => {
+  await mockTracksApi(page);
+  await mockLoadableAudioTrack(page, { secondTrack: true });
+  await page.route("**/tracks/9002/waveform-bin", async (route) => {
+    return route.fulfill({ status: 200, contentType: "application/octet-stream", body: synthesizeWaveformBinary(122) });
+  });
+  await loginToConsole(page);
+
+  const canvas = page.locator(".arch-envelope-canvas");
+
+  const trackA = page.locator(".arch-track-row", { hasText: "HIGH CONFIDENCE DETECTED" });
+  await trackA.dblclick();
+  await page.waitForResponse((res) => res.url().includes("/tracks/9002/waveform-bin"));
+  await page.locator(".arch-waveform-main").hover();
+  await page.waitForTimeout(200);
+  const trackAHoverImage = await canvas.evaluate((el) => el.toDataURL());
+
+  // Switch to a second track that ALSO has real analysis data, without
+  // moving the mouse off the waveform first — this is exactly the
+  // coverage-audit-flagged scenario: a stale envelopeHoverRef from track A
+  // could otherwise get redrawn against track B's (different-tempo, 128
+  // vs 122 BPM) envelope before the next mousemove event.
+  const trackB = page.locator(".arch-track-row", { hasText: "MANUAL BPM TRACK" });
+  await trackB.dblclick();
+  await page.waitForResponse((res) => res.url().includes("/tracks/9001/waveform-bin"));
+  await page.waitForTimeout(300);
+
+  // Immediately after the switch (before any new mousemove), the row must
+  // NOT still show track A's trace/hover position — whatever it shows now
+  // (idle hint or track B's own re-keyed data) must differ from the frame
+  // captured while actively hovering track A. Comparing to a pre-track-load
+  // baseline instead would be fragile — this app's layout genuinely renders
+  // the canvas at a different pixel width before any track has ever loaded
+  // than after, an unrelated timing detail, not a bleed signal.
+  await expect
+    .poll(() => canvas.evaluate((el) => el.toDataURL()))
+    .not.toBe(trackAHoverImage);
+
+  // Hovering the new track produces a real trace again — distinct from
+  // track A's (different synthetic tempo), proving the cache re-keyed to
+  // the new track's own onsetEnvelope() output, not a cached/stale one.
+  await page.locator(".arch-waveform-main").hover();
+  await expect
+    .poll(() => canvas.evaluate((el) => el.toDataURL()))
+    .not.toBe(trackAHoverImage);
 });
