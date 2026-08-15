@@ -117,6 +117,39 @@ No theme attribute on entry — pre-auth state stays achromatic.
 }
 ```
 
+### Meters vs. Chrome (clarified 2026-08-15, confidence badge resolved same day)
+
+The console's neutral-color rules (e.g. the confidence badge's former
+"never red/green-coded" law) apply to **chrome** — static UI tags, labels,
+scale markings, structural borders — not to **meters**. A meter's actual
+reading has always been allowed real color: VU's needle, SA's frequency
+bars, WF's bass/mid/high bands. The badge's old neutral rule borrowed "the
+VU-meter principle" by name, but that principle was always about the arc
+*markings* staying neutral while the *needle* itself moves and colors
+normally — never a blanket "no color" rule.
+
+**Confidence badge — final decision:** the badge itself now carries real
+color, discretely — see the updated rule below. (An earlier version of this
+clarification proposed a separate always-on meter element, continuously
+ramped on `var(--identity)`, living in the deck header's divider. That
+element was cut same-day, on direct comparison to the 2026-06-03 "vibe
+meter" failure — an ambient colored element sitting next to information
+already precisely available as text adds no real signal, just decoration.
+The badge's own color carries the meaning instead; no separate element.)
+
+**General principle stands for future work:** a genuine instrument-style
+meter (a live reading, not a static tag) may use color. A small static
+badge/tag is still chrome by default and should still stay neutral *unless*
+there's a specific, reasoned exception (like the confidence badge below) —
+this isn't a blanket relaxation for every future tag or button.
+
+**Context:** this console (D's, and L's admin view) is the *stock* theme —
+built by L working solo, achromatic by deliberate choice at the time. D has
+said directly he dislikes the monochrome look. Per-Master custom theming
+(above) is the actual long-term plan, not yet built for D specifically. This
+clarification exists so meters read correctly and consistently under any
+future theme, not just the current stock one.
+
 ---
 
 ## Entry Screen
@@ -292,7 +325,19 @@ Currently renders single-color (played green / unplayed off-white). Targeted for
 
 Shipped 2026-07-24. Real Quantize, offline beat detection, and a multi-point beatgrid — the platform's overlapping-with-pro-DJ-software features must meet or beat rekordbox/Serato (standing bar, confirmed with D). Cue/grid metadata is D's internal production data — console only, **never guest-facing**, same rule as Serato cue labels above.
 
-**Confidence badge:** sits LEFT of the BPM digits (read-first, left-to-right scan order). Rectangular tag, 0px border-radius, `1px solid var(--border)`, `--surface` background — same anatomy as the BPM nixie. Label "CONF" in Chakra Petch 500 8-9px uppercase; number in Space Mono, percentage format ("62%"), no decimal. **Always neutral cream/muted — never red/green-coded by confidence level**, matching the VU-meter principle that arc markings are neutral instrument chrome, not identity colors. Hidden entirely (not dimmed) until a detection has actually run.
+**Confidence badge:** sits LEFT of the BPM digits (read-first, left-to-right scan order). Rectangular tag, 0px border-radius, `1px solid var(--border)`, `--surface` background — same anatomy as the BPM nixie. Label "CONF" in Chakra Petch 500 8-9px uppercase; number in Space Mono, percentage format ("62%"), no decimal. Hidden entirely (not dimmed) until a detection has actually run.
+
+**Color — revised 2026-08-15 (supersedes the prior "always neutral" rule dated 2026-07-24, see Decisions Log):** the badge's border/text color maps to confidence in discrete 10%-wide bands, reusing the SA's already-established 5-band palette verbatim (`useAudioAnalyzer.js:55-82`) rather than inventing a new confidence-color scale:
+
+| Confidence | Color | Hex |
+|---|---|---|
+| ≤60% | Red | `#ff0000` |
+| 60-70% | Red-orange | `#ff5500` |
+| 70-80% | Green | `#00ff00` |
+| 80-90% | Cyan | `#00ffff` |
+| 90-100% | Indigo | `#6600ff` |
+
+Discrete bands, not a continuous gradient — matches the SA's own discrete-band treatment (frequency doesn't interpolate between band colors either). This is the one carve-out from the platform's general neutral-chrome rule for this specific badge; see "Meters vs. Chrome" above for why, and don't extend it to other tags/buttons without the same reasoning.
 
 **Double/halve octave-correction control:** full `god-btn` pattern — `background: transparent`, `border: 1px solid var(--border)`, Chakra Petch 500 11px 0.12em uppercase, hover → `border-color`/`color: var(--identity)`, 28px height desktop. Renders ONLY when `detected_bpm_confidence` is below the 0.6 threshold — invisible entirely for high-confidence detections, not merely disabled. Corrects the known DP-beat-tracker octave-ambiguity failure mode (90 vs 180 BPM reading equally strong).
 
@@ -306,6 +351,14 @@ Inter-anchor segment line: same `rgba(240,237,232,0.55)` off-white as the idle m
 **Playback-state gate:** grid editing (drag/insert) is paused-only. While playing, anchors dim to `opacity: 0.4` and an attempted drag/insert shows a transient inline "PAUSE TO EDIT GRID" label (Chakra Petch 500, small, `--text-secondary`, fading per the standard 120ms motion timing — no modal/toast). Avoids audible glitches from loop/quantize math recalculating mid-playback. Persisted anchor position is the only confirmation on success — no toast, matching "instrument responds, doesn't perform."
 
 **Not settled:** L flagged discomfort with pause-required editing during plan review (2026-07-22) but chose not to relitigate; shipped as the safe v1 default. Revisit if D finds pausing-to-edit genuinely annoying in practice — see TODOS.md.
+
+---
+
+### COMMS / REACH (Console — ContextStrip)
+
+Fixed-window hardware-style LCD readouts in the console's top strip, MPC III / Pioneer styling. COMMS is search-first (live substring filter against the vault list); REACH is a message preview. Neither has a border-radius or identity/status color for its idle chrome — informational, not a status signal.
+
+**Keyword-help (COMMS, v1: BEATGRID only).** Typing a recognized topic keyword shows a small "⏎ HELP" hint chip (`--text-secondary`-family, Chakra Petch, ~8px) next to the search field — discoverable before commit, doesn't interrupt live search. **Enter** (not auto-expand-while-typing) opens the existing expandable body panel with the topic's instructions; **Escape** closes it without touching the typed search text. Body content: Chakra Petch, `--text-secondary`, simple vertical list — same neutral treatment as the nav portal, no modal/toast (matches "instruments respond, they don't perform"). Topics live in `src/console/helpTopics.js`; new topics come from the console-wide button/discoverability audit (TODOS.md), not ad hoc additions.
 
 ---
 
@@ -507,6 +560,7 @@ INTAKE is a console-level action. The button lives in the browser utility bar (`
 | 2026-08-12 | PUBLISH-selection checkbox enlarged 10px→14px, wired to `--arch-muted-rgb`/`--arch-identity` instead of `--arch-accent-rgb` | Was using the wrong achromatic token — accent (labels/headers) instead of muted (structural/inactive controls) — so the checked state had no real identity-color contrast. Fixed alongside a tooltip when nothing is selected. Found via `/investigate`. |
 | 2026-08-14 | GOD MODE MOBILE named as a scoped exception to "console mobile optimization is out of scope" | D/L need to generate access codes from their phones — confirmed real, near-term. Kept narrow: one screen, one purpose, not the console made responsive. `ArchitectConsole`/`ContextStrip` stay desktop-only, unchanged. Caught during `/plan-design-review` — the design doc had been through `/office-hours` and `/plan-eng-review` before DESIGN.md was read this session. |
 | 2026-08-14 | `--text-secondary`/`--text-muted` brightened (~4.5:1 → ~7.15:1 / ~5.9:1) | These color rules were set by L without D's direct input while building. Real usage surfaced that both sat at the bare WCAG AA line — technically legal, murky in practice, especially for D. L confirmed directly: design rules made without D's input change when real feedback says so. Still strictly grayscale (no warmth added), still keeps `--text-muted` darker than `--text-secondary` (hierarchy preserved). |
+| 2026-08-15 | Confidence badge color — supersedes the 2026-07-24 "always neutral" rule. Badge now maps to confidence in 5 discrete 10%-wide bands, reusing the SA's palette verbatim (red→red-orange→green→cyan→indigo) | The neutral rule was set solo, pre-dated D's stated dislike of the monochrome console (see "Meters vs. Chrome" above). L explicitly overrode it during `/plan-eng-review`: "my word is law... there are colours in the VU AND WF AND SA." Reuses the already-vetted SA palette rather than inventing a new confidence-color mapping. A companion always-on meter element (continuously ramped, separate from the badge) was proposed, then cut same-day — direct comparison to the 2026-06-03 vibe-meter failure (ambient color next to info already precisely available as text = decoration, not signal). |
 
 ---
 

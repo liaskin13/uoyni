@@ -424,3 +424,31 @@ Captures patterns, mistakes, and corrections to prevent "Shadow Gaps" from repea
 - **Lesson**: `npm run preflight` fails at `check:design` with "banned space-themed display language found" flagging `fontFamily: "'Chakra Petch', monospace"` — a legitimate Google Font used throughout the console (`useAudioAnalyzer.js`, `DeckWaveform.jsx`, `DeckWaveformV2.jsx`). Confirmed pre-existing on `main` via `git show main:<file> | grep` (no working-tree checkout needed) — not introduced by any recent branch.
 - **Rule**: This is a checker bug (substring match on "chakra" catching the font name, not actual banned chakra/cosmic design language), not a real design-law violation. Don't try to "fix" it by renaming the font or touching unrelated files on an unrelated branch.
 - **How to apply**: If `check:design` fails only on "Chakra Petch" font declarations, treat as a known false positive — safe to proceed. If the script needs an actual fix (narrow the banned-word regex to exclude font-family string literals), that's separate scope from whatever branch surfaced it.
+
+---
+
+## Session: PR3 eng review + design review, COMMS-box BEATGRID v1 (2026-08-15)
+
+#### Reading a Screenshot Yourself Is Not the Same as Showing It to the User
+
+- **Lesson**: Built a wireframe, screenshotted it, and used the Read tool to look at it myself — then kept talking about "Frame 3" and "Frame 4" as if the user had seen them too. They hadn't. The Read tool result is visible to the model, not necessarily surfaced to the user's chat the same way. Caused real, multi-turn confusion ("i have no idea what we are even talking about right now") before it was caught.
+- **Rule**: Reading a screenshot/image with your own tools proves you looked at it. It does not prove the user has. If the user needs to see something, publish it (Artifact, or whatever the environment's actual user-visible delivery mechanism is) and hand them a real link/reference, not just a description of what you saw.
+- **How to apply**: Before referencing specific visual details ("the dark strip," "Frame 3") in conversation, confirm the artifact was actually published/delivered to the user this turn — not just generated and inspected internally.
+
+#### Disagreement Is Wanted — But Only When Grounded in Actual Understanding
+
+- **Lesson**: User said directly: "i like that you disagree with me, but only when you actually understand what im saying." This followed a sequence where an early disagreement (about where a UI element should live) turned out to be based on incomplete comprehension of what was being proposed, not a real architectural objection — corrected once the actual code/intent was verified.
+- **Rule**: Pushback is explicitly valued on this project — don't default to agreement. But pushback must be earned by genuinely understanding the proposal first (re-read, re-verify, ask if unsure), not by pattern-matching to a surface-level objection.
+- **How to apply**: Before disagreeing with a design/architecture proposal, silently check: have I actually confirmed what's being proposed against real code/data, or am I reacting to my own assumption of what was said? If the latter, verify first, then decide whether the disagreement still holds.
+
+#### D's Catalog Is Hip-Hop/R&B — Never Use a Different Genre as the "Example"
+
+- **Lesson**: Built a wireframe example for the onset-envelope explainability feature using the `house` genre archetype (four-on-the-floor, evenly-spaced spikes) — technically convenient since it was the first fixture reached for, but D's actual music is hip-hop/R&B. User caught it: "our stock build is around Ds catalogue so hip hop and r&b" and "this is Ds platform. not to forget."
+- **Rule**: Any illustrative/example data on this platform — mockups, test cases, demo content — should default to hip-hop/R&B, not a generic or arbitrary genre, even when other genres exist in the codebase for validation-suite completeness. The platform's whole premise is serving D specifically, not genre-agnostic correctness.
+- **How to apply**: Before choosing example data for a demo/mockup, check whether it should reflect D's actual catalog (hip-hop/R&B) rather than whatever fixture is technically closest at hand.
+
+#### DESIGN.md Rules Can Be Overridden by Direct Owner Authority — But Must Be Recorded, Not Silently Bent
+
+- **Lesson**: A confidence-badge color law ("always neutral, never red/green-coded") was correctly flagged as violated by an outside-voice review, then explicitly overridden by the user ("my word is law... there are colours in the VU AND WF AND SA"). The override turned out to be well-reasoned on its own terms too (the rule was meant for static chrome, not genuine instrument-style meters) — but the override itself was the user's call to make regardless.
+- **Rule**: When the user directs an explicit override of a documented DESIGN.md rule, comply — don't keep re-litigating after they've decided. But the override must be written back into DESIGN.md itself (dated, with reasoning), not left as a silent contradiction between what's documented and what's actually built — that's exactly the kind of drift that's caused confusion in past sessions (see the `--text-muted` stale-value incident, 2026-08-14).
+- **How to apply**: Owner override of a design law → update DESIGN.md's rule text AND its Decisions Log in the same session, with the date and the reasoning given. Never just build the exception and leave the doc stale.

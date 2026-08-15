@@ -1,6 +1,7 @@
 node_modules/
 .venv/
 dist/
+public/validationSummary.json
 .env
 .env.local
 .gstack/

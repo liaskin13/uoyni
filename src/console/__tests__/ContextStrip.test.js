@@ -103,3 +103,88 @@ describe("REACH LCD (regression check — unrelated sibling, should be unaffecte
     expect(screen.getByText("——")).toBeTruthy();
   });
 });
+
+describe("COMMS LCD — keyword help (BEATGRID v1)", () => {
+  it("typing a known topic alone still behaves as plain live search — no auto-open", () => {
+    renderStrip({ libSearch: "BEATGRID" });
+    expect(screen.queryByText("Pause playback — anchor edits are gated while a deck is playing.")).toBeNull();
+  });
+
+  it("shows the ⏎ HELP hint chip once the typed text matches a known topic", () => {
+    renderStrip({ libSearch: "BEATGRID" });
+    expect(screen.getByText("⏎ HELP")).toBeTruthy();
+  });
+
+  it("does not show the hint chip for a non-matching query", () => {
+    renderStrip({ libSearch: "eighty" });
+    expect(screen.queryByText("⏎ HELP")).toBeNull();
+  });
+
+  it("Enter on a matched topic opens the body with its instructions", () => {
+    renderStrip({ libSearch: "BEATGRID" });
+    fireEvent.keyDown(screen.getByPlaceholderText("SEARCH VAULT"), { key: "Enter" });
+    expect(screen.getByText("BEATGRID")).toBeTruthy();
+    expect(screen.getByText("[ and ] cycle which anchor is selected.")).toBeTruthy();
+  });
+
+  it("matching is case-insensitive and trims whitespace", () => {
+    renderStrip({ libSearch: "  beatgrid  " });
+    fireEvent.keyDown(screen.getByPlaceholderText("SEARCH VAULT"), { key: "Enter" });
+    expect(screen.getByText("Double-click empty waveform space to add an anchor, snapped to the nearest beat.")).toBeTruthy();
+  });
+
+  it("Escape closes the help body without clearing the search text", () => {
+    const onSearchChange = vi.fn();
+    renderStrip({ libSearch: "BEATGRID", onSearchChange });
+    const input = screen.getByPlaceholderText("SEARCH VAULT");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.getByText("[ and ] cycle which anchor is selected.")).toBeTruthy();
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(screen.queryByText("[ and ] cycle which anchor is selected.")).toBeNull();
+    expect(onSearchChange).not.toHaveBeenCalled();
+  });
+
+  it("re-searching a different topic while the help body is already open switches to it", () => {
+    const { rerender } = renderStrip({ libSearch: "BEATGRID" });
+    const input = screen.getByPlaceholderText("SEARCH VAULT");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.getByText("[ and ] cycle which anchor is selected.")).toBeTruthy();
+
+    rerender(React.createElement(ContextStrip, { libSearch: "TAP" }));
+    fireEvent.keyDown(screen.getByPlaceholderText("SEARCH VAULT"), { key: "Enter" });
+    expect(screen.getByText("Needs at least 4 taps — fewer shows \"keep tapping…\" and resets.")).toBeTruthy();
+    expect(screen.queryByText("[ and ] cycle which anchor is selected.")).toBeNull();
+  });
+
+  it("Enter on a non-matching query is a true no-op — no panel opens", () => {
+    const { container } = renderStrip({ libSearch: "not a real topic" });
+    fireEvent.keyDown(screen.getByPlaceholderText("SEARCH VAULT"), { key: "Enter" });
+    expect(container.querySelector(".arch-context-help")).toBeNull();
+    expect(container.querySelector(".is-open")).toBeNull();
+  });
+
+  it("Escape on the search input does not close a different panel (e.g. nav) that's open", () => {
+    renderStrip({ libSearch: "BEATGRID" });
+    fireEvent.click(screen.getByLabelText("PSC navigation"));
+    expect(screen.getByText("VAULTS")).toBeTruthy();
+
+    fireEvent.keyDown(screen.getByPlaceholderText("SEARCH VAULT"), { key: "Escape" });
+    expect(screen.getByText("VAULTS")).toBeTruthy();
+  });
+});
+
+describe("COMMS LCD — keyword help (T10, TAP topic)", () => {
+  it("shows the ⏎ HELP hint chip for the TAP topic", () => {
+    renderStrip({ libSearch: "TAP" });
+    expect(screen.getByText("⏎ HELP")).toBeTruthy();
+  });
+
+  it("Enter on TAP opens the body with its instructions, same behavior as BEATGRID", () => {
+    renderStrip({ libSearch: "TAP" });
+    fireEvent.keyDown(screen.getByPlaceholderText("SEARCH VAULT"), { key: "Enter" });
+    expect(screen.getByText("TAP")).toBeTruthy();
+    expect(
+      screen.getByText("Needs at least 4 taps — fewer shows \"keep tapping…\" and resets."),
+    ).toBeTruthy();
+  });
+});

@@ -57,6 +57,7 @@ export default function DeckWaveformV2({
   beatGridPoints        = [],
   onBeatGridPointsChange = null,
   identityColor          = "#14dc14",
+  onHoverTime            = null, // T11 — reports the hovered time (or null on leave), reusing xToTime rather than making the caller reimplement this component's viewport windowing
 }) {
   const canvasRef      = useRef(null);
   const rafRef         = useRef(null);
@@ -549,6 +550,7 @@ export default function DeckWaveformV2({
   };
 
   const handleMouseMove = (e) => {
+    onHoverTime?.(xToTime(e.clientX));
     if (draggingAnchorIdxRef.current !== -1) {
       const idx = draggingAnchorIdxRef.current;
       const points = dragPreviewPointsRef.current;
@@ -574,6 +576,11 @@ export default function DeckWaveformV2({
     const next = Math.max(0, Math.min(durRef.current, seekedTimeRef.current + dt));
     seekedTimeRef.current = next;
     onSeek(next);
+  };
+
+  const handleMouseLeave = () => {
+    handleMouseUp();
+    onHoverTime?.(null);
   };
 
   const handleMouseUp = () => {
@@ -708,7 +715,7 @@ export default function DeckWaveformV2({
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
         onKeyDown={handleKeyDown}
         tabIndex={onBeatGridPointsChange ? 0 : undefined}
         aria-label="Waveform with editable beatgrid"

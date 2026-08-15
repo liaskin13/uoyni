@@ -1,38 +1,63 @@
 # Next Session — Resume Here
 
-**Last updated:** 2026-08-14 (third session same day — GOD MODE MOBILE:
-`/office-hours` → `/plan-eng-review` → `/plan-design-review` → build → deploy
-→ `/qa` → post-QA polish)
+**Last updated:** 2026-08-15 (PR3 full design lock: `/plan-eng-review` →
+live design collaboration → `/plan-design-review` (T10/T11/T13) →
+context-save/learn closeout)
 
 ## Status
 
-**GOD MODE MOBILE shipped, deployed, and live-verified by both L and D
-independently.** D and L can now generate, share (text or QR), and revoke
-access codes from their phones — the ACCESS CODES panel gap from earlier
-sessions is closed, just not where originally assumed (a new mobile-only
-surface, not the desktop console panel; see decisions below). Full loop this
-session: office-hours → eng review (12 findings, all resolved) → design
-review (2/10 → 8/10) → build → deploy → live QA (6/6 passed) → a
-user-reported polish round (viewport bug, badge/header layout, two-way nav
-to the listening view, platform-wide contrast brighten) → CHANGELOG/version
-bump (now **1.3.0.0**) via PR #11.
+**PR3 (T7-T14) is fully designed and reviewed — engineering AND visual —
+but NOTHING in it is implemented yet.** T7/T8 confirmed already shipped
+(multi-genre validation suite + CI). T9-T14 all have locked designs, real
+verified data behind every decision, and a clear dependency-ordered build
+sequence, but zero code has been written this session. Full record: CEO
+plan doc `~/.gstack/projects/liaskin13-psoulc/ceo-plans/2026-08-11-genre-generalized-beat-detection.md`
+(`## Implementation Tasks` + `## GSTACK REVIEW REPORT` at the end). Session
+checkpoint with the exact build order:
+`~/.gstack/projects/liaskin13-psoulc/checkpoints/20260815-080948-pr3-t9-t14-design-locked.md`.
 
-Zero known open bugs. 514 frontend + 14 worker tests (worker's first-ever
-test infra). Design doc has the full decision trail:
-`~/.gstack/projects/liaskin13-psoulc/codespace-main-design-20260814-113335.md`.
-QA report: `.gstack/qa-reports/qa-report-uoyni-com-2026-08-14-godmode-mobile.md`.
+Separately, unrelated to PR3: the COMMS-box keyword-help system (BEATGRID
+v1, from an older TODOS.md item) WAS implemented and tested this session —
+17/17 new tests passing, full suite 520/520. That part is genuinely done.
 
-### Decisions worth knowing before touching this area again
-- Access-code generation is now **both D and L**, not L-only — reverses a
-  prior decision, confirmed explicitly by L. Superseding learning logged.
-- `RequestAccessModal.jsx` (the *other* access UI) is legacy/disconnected —
-  localStorage-only, hands out the shared `0000` code, not real per-guest
-  codes. Do not wire it up as-is if picking up Capability 2 below.
-- GOD MODE MOBILE is a **named exception** in DESIGN.md to "console mobile
-  optimization is out of scope" — a new narrow screen, not the console made
-  responsive. Read that DESIGN.md section before extending it.
+### Decisions worth knowing before touching PR3 again
+- **T9's badge is colored** (5-band SA palette, discrete, not a gradient) —
+  this overrides DESIGN.md's prior "confidence badge always neutral" rule,
+  by L's explicit direction. DESIGN.md's rule text and Decisions Log are
+  both already updated (2026-08-15 entries) — don't re-read the rule as if
+  it still says neutral-only.
+- **T9b (a companion always-on meter) was designed, then cut** — don't
+  rebuild it without a real reason. It's in TODOS.md as "revisit only if
+  the badge alone proves too slow to scan."
+- **T11's example data must be D's actual genre (hip-hop/R&B)**, never a
+  generic placeholder — got this wrong once mid-session, corrected. See
+  memory `project_design_md_is_stock_theme` and tonight's lessons.md entry.
+- **T12 ships as its own isolated PR**, not bundled with T9/T10/T11/T13 —
+  it's the only item with real regression risk (touches shared SA/WF/VU
+  rendering). Includes a bundled pre-existing bug fix (click-seek during
+  zoom transitions) that's unrelated to PR3 but rides along since it
+  touches the same file.
+- **Execution order is NOT arbitrary** — T14 must land before T9c; T12
+  should land after both (shares a file with T14); T9→T10→T11→T13 can run
+  in a fully separate parallel worktree (no file overlap with the other
+  lane). Full table in the checkpoint file above.
 
 ## Start here next session
+
+**Build PR3, in the order above.** Start with T14 (smallest, unblocks T9c) —
+extract `computeVisibleWindow` in `src/lib/beatDetector.js`, wire into
+`DeckWaveformV2.jsx`. Everything else's exact spec (files, verify steps,
+locked visual design) is in the CEO plan doc — read `## Implementation
+Tasks` in full before starting, don't re-derive from this summary.
+
+After PR3 ships: the console-wide button/discoverability audit (see item 2
+below) should also verify T10/T11/T13's new COMMS-help hints actually work,
+not just design them — they were built with discoverability baked in this
+session specifically so that audit wouldn't have to start from scratch.
+
+---
+
+## Prior session's still-open items (GOD MODE MOBILE, 2026-08-14) — unchanged, not yet started
 
 **L said directly: "i have to do a full design redo on the entire guest
 flow."** Not scoped yet — this is the natural next `/office-hours` or
@@ -67,8 +92,8 @@ After that (unchanged from before, still not started):
 3. **Verify D's tablet experience** — confirmed this session D does use a
    tablet, but whether the (untouched) desktop console is actually usable
    at that width was never checked. Ask D directly.
-4. **Build the COMMS-box keyword-help system (BEATGRID v1)** — still fully
-   planned, not yet implemented. Full plan:
+4. ~~Build the COMMS-box keyword-help system (BEATGRID v1)~~ — **SHIPPED
+   2026-08-15**, see Status above. Original plan (now historical):
    `~/.claude/plans/and-read-lessons-and-concurrent-turing.md`.
 5. Everything else tracked in `TODOS.md` — read that file for the full
    ranked list, including the HISTORY filter bug (Medium, still not fixed)

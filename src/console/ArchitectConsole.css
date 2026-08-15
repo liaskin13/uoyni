@@ -574,6 +574,30 @@
   letter-spacing: 0.06em;
 }
 
+/* T10 — tap-tempo button. Uses the god-btn interaction pattern (border,
+   hover, transitions) but overrides its default Chakra Petch face to match
+   the surrounding arch-stat family (JetBrains Mono) — it reads as part of
+   the same stats row, not a visually separate control. */
+.arch-tap-tempo-btn {
+  height: 18px;
+  padding: 0 6px;
+  margin: 0 2px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  font-variant-numeric: tabular-nums;
+}
+
+.arch-tap-tempo-btn--active {
+  border-color: var(--identity, rgba(240, 237, 232, 0.35));
+  color: var(--identity, rgba(240, 237, 232, 0.95));
+}
+
+.arch-tap-hint {
+  font-style: italic;
+  opacity: 0.6;
+}
+
 .arch-stat-sep {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.58rem;
@@ -609,6 +633,21 @@
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+/* T11 — onset-envelope explainability row. Permanently reserved (idle hint
+   when not hovering) so nothing else in the console shifts position when
+   it activates — matches the "nothing pops up or moves randomly" motion law. */
+.arch-envelope-row {
+  margin-bottom: 8px;
+}
+
+.arch-envelope-canvas {
+  display: block;
+  width: 100%;
+  height: 36px;
+  border: 1px solid rgba(var(--arch-accent-rgb), 0.14);
+  background: rgba(0, 0, 0, 0.3);
 }
 
 /* VU meter column — two canvases side by side (L + R, both in session identity) */
@@ -2242,10 +2281,13 @@
 }
 
 /* Detected-BPM confidence badge — sits left of the BPM digits (read first).
-   Neutral cream/muted always, never red/green-coded by confidence level —
-   matches the VU-meter principle that arc markings are neutral instrument
-   chrome, not identity colors. Rectangular tag, same anatomy as the BPM
-   nixie in the Intake modal. */
+   Color is set inline per-instance via confidenceBadgeColor() (5 discrete
+   10%-wide bands, reusing the SA's palette) — revised 2026-08-15, supersedes
+   the prior "always neutral" rule. See DESIGN.md's "Confidence badge"
+   section and Decisions Log for the reasoning; don't revert border/text to
+   a flat neutral color. Rectangular tag, same anatomy as the BPM nixie in
+   the Intake modal. Used both in track-list rows and the loaded-deck header
+   (arch-deck-stats). */
 .arch-detected-bpm-badge {
   display: inline-block;
   border: 1px solid var(--border, #222222);
@@ -2253,7 +2295,6 @@
   margin-right: 4px;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.56rem;
-  color: rgba(240, 237, 232, 0.55);
   letter-spacing: 0.04em;
 }
 
@@ -2550,6 +2591,15 @@
   border-color: rgba(var(--arch-accent-rgb), 0.45);
   color: var(--arch-accent);
   background: rgba(var(--arch-accent-rgb), 0.06);
+}
+
+/* T13 — read-only info value (validation numbers), not a toggle button —
+   same row, no border/click affordance. */
+.arch-settings-value {
+  font-size: 0.54rem;
+  letter-spacing: 0.06em;
+  color: rgba(var(--arch-muted-rgb), 0.68);
+  font-variant-numeric: tabular-nums;
 }
 
 .arch-vault-config-section {

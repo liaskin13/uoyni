@@ -35,6 +35,8 @@ import {
   saveWaveform,
   WAVEFORM_V2_SENTINEL,
 } from "../lib/waveformAnalyzer";
+import { onsetEnvelope } from "../lib/beatDetector";
+import { useValidationSummary, formatValidationSummary } from "../lib/useValidationSummary";
 import { BatchUploadQueue } from "../components/BatchUploadQueue";
 
 // D1 stores waveform_data as JSON.stringify(value), so "v2" is stored as '"v2"'.
@@ -187,6 +189,88 @@ export function resolveTrackBpm(track) {
     return track.detected_bpm;
   }
   return null;
+}
+
+// Confidence badge color — 5 discrete 10%-wide bands, reusing the SA's
+// already-vetted palette verbatim (useAudioAnalyzer.js:55-82) rather than
+// inventing a new confidence-color scale. Discrete bands, not a gradient —
+// matches the SA's own discrete-band treatment. Overrides DESIGN.md's prior
+// "always neutral" badge rule by explicit owner direction (2026-08-15,
+// see DESIGN.md Decisions Log) — do not revert to a flat neutral color.
+export function confidenceBadgeColor(confidence) {
+  const pct = (confidence ?? 0) * 100;
+  if (pct < 60) return "#ff0000";
+  if (pct < 70) return "#ff5500";
+  if (pct < 80) return "#00ff00";
+  if (pct < 90) return "#00ffff";
+  return "#6600ff";
+}
+
+// Shared CONF badge — used both in track-list rows and the loaded-deck
+// header (arch-deck-stats). Hidden entirely (not dimmed) until a detection
+// has actually run, per DESIGN.md's "Confidence badge" spec.
+function ConfBadge({ confidence }) {
+  const color = confidenceBadgeColor(confidence);
+  return (
+    <span
+      className="arch-detected-bpm-badge"
+      style={{ borderColor: color, color }}
+      aria-label={`Detected BPM confidence: ${Math.round((confidence ?? 0) * 100)}%`}
+    >
+      CONF {Math.round((confidence ?? 0) * 100)}%
+    </span>
+  );
+}
+
+// T10 — tap-tempo gesture minimum. Fewer taps than this on gesture-finalize
+// shows "keep tapping…" instead of computing a BPM.
+export const TAP_MIN_TAPS = 4;
+
+// T10 — converts a tap gesture's raw timestamps (ms, any monotonic clock) to
+// a BPM, or null if there aren't enough taps yet OR the taps carry no real
+// timing signal (e.g. zero-interval — every tap landed on the same
+// millisecond, which happens with rapid/duplicate synthetic events). Without
+// that guard, a zero-ms median divides 60000/0 = Infinity, which would then
+// get PATCHed to the server as bpm_display:"Infinity" — verified as a real,
+// reachable bug during /ship's coverage audit, not hypothetical. Outlier
+// rejection: any interval outside 50-150% of the running median is discarded
+// before averaging, so one fumbled extra/missed tap doesn't skew the result.
+// Extracted as a pure function so this math is unit-testable independent of
+// the gesture-timing/React-state plumbing in finalizeTapGesture.
+export function computeTapTempoBpm(taps) {
+  if (!taps || taps.length < TAP_MIN_TAPS) return null;
+  const intervals = [];
+  for (let i = 1; i < taps.length; i++) intervals.push(taps[i] - taps[i - 1]);
+  const sorted = [...intervals].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  const kept = intervals.filter((iv) => iv >= median * 0.5 && iv <= median * 1.5);
+  const use = kept.length ? kept : intervals;
+  const avgMs = use.reduce((a, b) => a + b, 0) / use.length;
+  if (!(avgMs > 0)) return null; // zero/negative/NaN — no real tempo signal
+  return Math.round((60000 / avgMs) * 10) / 10;
+}
+
+// T11 — beat-relative onset-envelope window: 2 beats before + 2 beats after
+// the hovered time (4 * 60/bpm seconds total), converted to a bar-index
+// range and a 0-1 cursor fraction locating hoverTime within that range.
+// Extracted as a pure function (all inputs primitives, no DOM/canvas) so the
+// window math is unit-testable independent of the canvas-drawing plumbing
+// in drawEnvelopeRow. Returns null when there isn't a real window to show
+// (bpm/envelope missing, or the computed window is empty).
+export function computeEnvelopeWindow({ hoverTime, bpm, envelopeLength, barsPerSec = 50 }) {
+  if (hoverTime == null || !bpm || !envelopeLength) return null;
+  const beatSec = 60 / bpm;
+  const windowStart = Math.max(0, hoverTime - 2 * beatSec);
+  const windowEnd = hoverTime + 2 * beatSec;
+  const startBar = Math.max(0, Math.floor(windowStart * barsPerSec));
+  const endBar = Math.min(envelopeLength, Math.ceil(windowEnd * barsPerSec));
+  if (endBar <= startBar) return null;
+
+  const actualStart = startBar / barsPerSec;
+  const actualEnd = endBar / barsPerSec;
+  const cursorFrac =
+    (hoverTime - actualStart) / Math.max(0.0001, actualEnd - actualStart);
+  return { startBar, endBar, cursorFrac };
 }
 
 // Parses track.beat_grid_points defensively — it's stored as a JSON TEXT
@@ -536,6 +620,13 @@ function ArchitectConsole({
   const waveformQueueRef = useRef([]); // pending trackIds for sequential auto-gen
   const waveformQueueRunning = useRef(false);
 
+  // T10 — tap-tempo gesture state (see handleTap/finalizeTapGesture below)
+  const tapTimestampsRef = useRef([]);
+  const tapIdleTimeoutRef = useRef(null);
+  const tapHintTimeoutRef = useRef(null);
+  const [tapCount, setTapCount] = useState(0);
+  const [tapHintVisible, setTapHintVisible] = useState(false);
+
   // Hot cues: { trackId: { 1: { time: 10.5 }, 2: { time: 45.2 }, ... } }
   const [hotCues, setHotCues] = useState(() => {
     try {
@@ -611,10 +702,31 @@ function ArchitectConsole({
   const overviewRef = useRef(null);
   const waveformHoveredRef  = useRef(false);
   const overviewHoveredRef  = useRef(false);
+
+  // T11 — onset-envelope explainability row. Envelope is computed once per
+  // track load (onsetEnvelope is O(n) but cheap-once/wasteful-per-hover —
+  // see beatDetector.js's header) and cached here, keyed by track id so a
+  // fast track switch can't show a stale envelope. Hover time is tracked in
+  // a ref, not React state — DeckWaveformV2 reports it on every mousemove,
+  // and redrawing the row's own canvas imperatively avoids a React
+  // re-render per pixel of mouse movement (same reasoning as this file's
+  // other rAF/ref-driven canvases).
+  const envelopeCanvasRef = useRef(null);
+  const envelopeCacheRef = useRef({ trackId: null, envelope: null });
+  const envelopeHoverRef = useRef(null); // hovered time in seconds, or null when idle
+  // Backing-store size (CSS width + dpr) last applied to the canvas.
+  // drawEnvelopeRow() reassigns canvas.width/height only when this actually
+  // changes — reassigning on every call (this row redraws on every native
+  // mousemove over the waveform) forces a full canvas reset each time,
+  // needlessly expensive at mouse-event rates. Found by /ship's performance
+  // specialist, 2026-08-15.
+  const envelopeCanvasSizeRef = useRef({ w: 0, dpr: 0 });
   const [overviewStyle, setOverviewStyle] = useState(0); // 0=LAYERS 1=OUTLINE 2=TRACES
   const OVERVIEW_STYLES = ['LAYERS', 'OUTLINE', 'TRACES'];
   const stepOverviewStyle = (dir) =>
     setOverviewStyle(s => (s + dir + OVERVIEW_STYLES.length) % OVERVIEW_STYLES.length);
+
+  const validationSummary = useValidationSummary(); // T13 — settings panel row
 
   const { vuRef, vuRRef, specRef, energyRef, phiRef, bpmResultRef } = useAudioAnalyzer({
     isPlaying,
@@ -925,6 +1037,17 @@ function ArchitectConsole({
       setLoadedDeckId(track.id);
       loadedDeckIdRef.current = track.id;
       setDeckHighResBars(null);
+      // T10/T11 — a mid-gesture tap count or a stale hover position from the
+      // PREVIOUS track must not bleed into the newly loaded one (coverage
+      // audit finding, 2026-08-15): the tap button would otherwise show a
+      // leftover "TAP · N" on a fresh track, and the envelope row could
+      // briefly draw the old track's data at the old hover position.
+      tapTimestampsRef.current = [];
+      if (tapIdleTimeoutRef.current) clearTimeout(tapIdleTimeoutRef.current);
+      if (tapHintTimeoutRef.current) clearTimeout(tapHintTimeoutRef.current);
+      setTapCount(0);
+      setTapHintVisible(false);
+      envelopeHoverRef.current = null;
       pushTrackHistory(track);
       setTrackPlayCounts((prev) => ({
         ...prev,
@@ -968,6 +1091,17 @@ function ArchitectConsole({
       setLoadedDeckId(track.id);
       loadedDeckIdRef.current = track.id;
       setDeckHighResBars(null);
+      // T10/T11 — a mid-gesture tap count or a stale hover position from the
+      // PREVIOUS track must not bleed into the newly loaded one (coverage
+      // audit finding, 2026-08-15): the tap button would otherwise show a
+      // leftover "TAP · N" on a fresh track, and the envelope row could
+      // briefly draw the old track's data at the old hover position.
+      tapTimestampsRef.current = [];
+      if (tapIdleTimeoutRef.current) clearTimeout(tapIdleTimeoutRef.current);
+      if (tapHintTimeoutRef.current) clearTimeout(tapHintTimeoutRef.current);
+      setTapCount(0);
+      setTapHintVisible(false);
+      envelopeHoverRef.current = null;
       announce(`${track.title || "Track"} loaded to deck. Press PLAY.`);
       loadWaveformBinaryForDeck(track.id);
     } catch (err) {
@@ -1637,6 +1771,99 @@ function ArchitectConsole({
         announceStatus("Save failed — check console for details.", "error");
       });
   };
+
+  // T10 — tap-tempo manual override. A gesture is a burst of taps with no
+  // gap over TAP_IDLE_MS; it finalizes (computes a BPM, or shows the
+  // "keep tapping…" hint) on that idle timeout, not on any explicit
+  // press-release event. Writes bpm_display via the same optimistic-PATCH
+  // pattern as handleEditSave, so the deck header reflects it immediately.
+  const TAP_IDLE_MS = 2000;
+  const TAP_TEMPO_USAGE_KEY = "psc_tap_tempo_uses";
+
+  const applyTapTempo = useCallback(
+    (bpm) => {
+      if (!deckTrack) return;
+      const trackId = deckTrack.id;
+      const originalTrack = trackListData.find((t) => t.id === trackId);
+      const bpmStr = String(bpm);
+
+      setTrackListData((prev) =>
+        prev.map((t) => (t.id === trackId ? { ...t, bpm_display: bpmStr } : t)),
+      );
+
+      // Usage counter (plan D-note: "revisit only if real usage shows the
+      // control needs more than this") — same localStorage pattern already
+      // used throughout this file (hot cues, matrix history, prefs); no
+      // server-side analytics infra exists here to log to instead.
+      try {
+        const prevCount = parseInt(
+          localStorage.getItem(TAP_TEMPO_USAGE_KEY) || "0",
+          10,
+        );
+        localStorage.setItem(
+          TAP_TEMPO_USAGE_KEY,
+          String((Number.isFinite(prevCount) ? prevCount : 0) + 1),
+        );
+      } catch {
+        // localStorage unavailable — usage counting is best-effort, not
+        // load-bearing for the tempo-apply itself.
+      }
+
+      fetch(`${UPLOAD_WORKER_URL}/tracks/${trackId}`, {
+        method: "PATCH",
+        headers: {
+          "PSC-Secret": UPLOAD_SECRET,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ bpm_display: bpmStr }),
+      })
+        .then(async (res) => {
+          if (!res.ok) throw new Error(`[PSC] tap-tempo PATCH ${res.status}`);
+          const result = await res.json().catch(() => ({}));
+          if (!result.success)
+            throw new Error("[PSC] tap-tempo save: D1 returned success=false");
+          announceStatus(`Tempo set: ${bpm} BPM (tap)`);
+        })
+        .catch((err) => {
+          console.error("[PSC] tap-tempo save failed:", err);
+          if (originalTrack) {
+            setTrackListData((prev) =>
+              prev.map((t) => (t.id === trackId ? originalTrack : t)),
+            );
+          }
+          announceStatus("Tap-tempo save failed — check console for details.", "error");
+        });
+    },
+    [deckTrack, trackListData],
+  );
+
+  const finalizeTapGesture = useCallback(() => {
+    const taps = tapTimestampsRef.current;
+    const bpm = computeTapTempoBpm(taps);
+    if (bpm != null) {
+      applyTapTempo(bpm);
+    } else if (taps.length > 0) {
+      setTapHintVisible(true);
+      if (tapHintTimeoutRef.current) clearTimeout(tapHintTimeoutRef.current);
+      tapHintTimeoutRef.current = setTimeout(() => setTapHintVisible(false), 1500);
+    }
+    tapTimestampsRef.current = [];
+    setTapCount(0);
+  }, [applyTapTempo]);
+
+  const handleTap = useCallback(() => {
+    if (!deckTrack) return;
+    const now = performance.now();
+    const taps = tapTimestampsRef.current;
+    if (taps.length && now - taps[taps.length - 1] > TAP_IDLE_MS) {
+      taps.length = 0; // prior gesture went stale — start a fresh one
+    }
+    taps.push(now);
+    setTapCount(taps.length);
+    setTapHintVisible(false);
+    if (tapIdleTimeoutRef.current) clearTimeout(tapIdleTimeoutRef.current);
+    tapIdleTimeoutRef.current = setTimeout(finalizeTapGesture, TAP_IDLE_MS);
+  }, [deckTrack, finalizeTapGesture]);
 
   // Octave-error correction (plan D8): a one-click fix for the known DP
   // beat-tracker limitation where 90 BPM and 180 BPM fit the rhythm equally
@@ -2400,6 +2627,112 @@ function ArchitectConsole({
   }, [deckWaveformHighData, currentTime, audioDuration, hotCues, deckTrack, overviewStyle]);
 
   const isD = viewer === "D";
+  const envelopeIdentityColor = isD ? "#14dc14" : "#00e5ff";
+
+  // T11 — recompute the onset envelope once per track load (not per hover —
+  // onsetEnvelope is O(n) but wasteful re-run dozens of times/sec while
+  // scrubbing), cached keyed by track id so a fast deck switch can't render
+  // a stale envelope under the new track's hover.
+  useEffect(() => {
+    if (!deckTrack || !deckWaveformHighData || deckWaveformHighData.length === 0) {
+      envelopeCacheRef.current = { trackId: null, envelope: null };
+    } else if (envelopeCacheRef.current.trackId !== deckTrack.id) {
+      envelopeCacheRef.current = {
+        trackId: deckTrack.id,
+        envelope: onsetEnvelope(deckWaveformHighData),
+      };
+    }
+    drawEnvelopeRow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deckTrack?.id, deckWaveformHighData]);
+
+  // ENVELOPE_BARS_PER_SEC matches analyzeAudio's barsPerSec (see
+  // beatDetector.js's frameRate default / waveformAnalyzer.js's
+  // BEAT_DETECTOR_FRAME_RATE) — this file already assumes 50 bars/sec
+  // elsewhere (zoom-window math above) without a shared named constant.
+  const ENVELOPE_BARS_PER_SEC = 50;
+  const ENVELOPE_ROW_H = 36;
+
+  function drawEnvelopeRow() {
+    const canvas = envelopeCanvasRef.current;
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.getBoundingClientRect().width || 800;
+    const ctx = canvas.getContext("2d");
+    const prevSize = envelopeCanvasSizeRef.current;
+    if (prevSize.w !== w || prevSize.dpr !== dpr) {
+      // Only touch the backing store on a genuine size change (mount,
+      // window resize) — reassigning canvas.width/height resets the whole
+      // bitmap and context transform even when the value is unchanged.
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(ENVELOPE_ROW_H * dpr);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
+      envelopeCanvasSizeRef.current = { w, dpr };
+    }
+    ctx.clearRect(0, 0, w, ENVELOPE_ROW_H);
+
+    const drawHint = (text) => {
+      ctx.font = "8px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "rgba(240,237,232,0.32)";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, w / 2, ENVELOPE_ROW_H / 2);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+    };
+
+    const hoverTime = envelopeHoverRef.current;
+    if (hoverTime == null || !deckTrack) {
+      drawHint("HOVER WAVEFORM TO INSPECT ENVELOPE");
+      return;
+    }
+
+    const { envelope, trackId } = envelopeCacheRef.current;
+    const bpm = resolveTrackBpm(deckTrack) ?? deckTrack.detected_bpm ?? null;
+    if (!envelope || envelope.length === 0 || trackId !== deckTrack.id || !bpm) {
+      drawHint("ENVELOPE UNAVAILABLE");
+      return;
+    }
+
+    const win = computeEnvelopeWindow({
+      hoverTime,
+      bpm,
+      envelopeLength: envelope.length,
+      barsPerSec: ENVELOPE_BARS_PER_SEC,
+    });
+    if (!win) {
+      drawHint("ENVELOPE UNAVAILABLE");
+      return;
+    }
+    const { startBar, endBar, cursorFrac } = win;
+    const slice = envelope.slice(startBar, endBar);
+
+    const localMax = Math.max(...slice, 0.0001);
+    const barW = w / slice.length;
+    ctx.fillStyle = envelopeIdentityColor;
+    ctx.globalAlpha = 0.6;
+    for (let i = 0; i < slice.length; i++) {
+      const barH = (slice[i] / localMax) * (ENVELOPE_ROW_H - 6);
+      ctx.fillRect(i * barW, ENVELOPE_ROW_H - barH, Math.max(1, barW - 0.5), barH);
+    }
+    ctx.globalAlpha = 1;
+
+    // Cursor marker — meaning conveyed by position, not color (matches the
+    // main waveform's playhead: rgba(255,255,255,0.9), no glow, precise).
+    const cursorX = cursorFrac * w;
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cursorX, 0);
+    ctx.lineTo(cursorX, ENVELOPE_ROW_H);
+    ctx.stroke();
+  }
+
+  const handleEnvelopeHover = (time) => {
+    envelopeHoverRef.current = time;
+    drawEnvelopeRow();
+  };
 
   return (
     <motion.div
@@ -2464,6 +2797,12 @@ function ArchitectConsole({
               : "SELECT A TRACK"}
           </div>
           <div className="arch-deck-stats">
+            {deckTrack &&
+              !cleanBpm(deckTrack.bpm_display) &&
+              !deckTrack.bpm &&
+              deckTrack.detected_bpm != null && (
+                <ConfBadge confidence={deckTrack.detected_bpm_confidence} />
+              )}
             <span className="arch-stat">
               BPM{" "}
               {deckTrack ? (
@@ -2501,6 +2840,19 @@ function ArchitectConsole({
                   {liveBpm ?? "—"}
                 </strong>
               </span>
+            )}
+            {deckTrack && (
+              <button
+                type="button"
+                className={`god-btn arch-tap-tempo-btn${tapCount > 0 ? " arch-tap-tempo-btn--active" : ""}`}
+                onClick={handleTap}
+                aria-label="Tap tempo — click on the beat to set BPM manually"
+              >
+                {tapCount > 0 ? `TAP · ${tapCount}` : "TAP"}
+              </button>
+            )}
+            {tapHintVisible && (
+              <span className="arch-stat arch-tap-hint">keep tapping…</span>
             )}
             <span
               className={`arch-stat arch-elapsed${isPlaying ? " arch-elapsed--playing" : ""}`}
@@ -2610,11 +2962,23 @@ function ArchitectConsole({
                   getAudioLatency={loadedTrack?.id === deckTrack?.id ? () => { const ctx = audioEngine.getAudioContext(); return ctx ? (ctx.outputLatency || 0) + (ctx.baseLatency || 0) : 0; } : null}
                   beatGridPoints={parseBeatGridPoints(deckTrack.beat_grid_points)}
                   onBeatGridPointsChange={(pts) => handleBeatGridPointsChange(deckTrack, pts)}
-                  identityColor={isD ? "#14dc14" : "#00e5ff"}
+                  identityColor={envelopeIdentityColor}
+                  onHoverTime={handleEnvelopeHover}
                 />
               )}
             </div>
           </div>
+        </div>
+
+        {/* T11 — onset-envelope explainability row. Always present (idle hint
+            when not hovering) so nothing else in the console shifts position
+            when it activates. */}
+        <div className="arch-envelope-row" aria-hidden="true">
+          <canvas
+            ref={envelopeCanvasRef}
+            className="arch-envelope-canvas"
+            aria-label="Onset envelope — hover the waveform to inspect detected beat onsets"
+          />
         </div>
 
         {/* Analyzer row — VU L+R (left) + Spectrum Analyzer (center) + Phase Correlation (right) */}
@@ -3503,13 +3867,7 @@ function ArchitectConsole({
                             {!cleanBpm(t.bpm_display) &&
                               !t.bpm &&
                               t.detected_bpm != null && (
-                                <span
-                                  className="arch-detected-bpm-badge"
-                                  aria-label={`Detected BPM confidence: ${Math.round((t.detected_bpm_confidence ?? 0) * 100)}%`}
-                                >
-                                  CONF{" "}
-                                  {Math.round((t.detected_bpm_confidence ?? 0) * 100)}%
-                                </span>
+                                <ConfBadge confidence={t.detected_bpm_confidence} />
                               )}
                             <span
                               onDoubleClick={(e) => handleEditStart(e, t)}
@@ -4110,6 +4468,15 @@ function ArchitectConsole({
                   >
                     {historyEnabled ? "ENABLED" : "DISABLED"}
                   </button>
+                </div>
+              </section>
+              <section className="arch-settings-section">
+                <h4 className="arch-settings-title">BEAT DETECTION</h4>
+                <div className="arch-settings-row">
+                  <span>Validation Suite</span>
+                  <span className="arch-settings-value">
+                    {formatValidationSummary(validationSummary)}
+                  </span>
                 </div>
               </section>
             </div>

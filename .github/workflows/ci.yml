@@ -37,4 +37,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      # public/validationSummary.json is gitignored and normally generated as
+      # part of `npm run build` (see scripts/generate-validation-summary.js) —
+      # the e2e-smoke job never runs a full build, so without this step the
+      # file is absent and tests/e2e/validationSummary.spec.js's real-numbers
+      # assertions fail (they'd only ever see the "PENDING VALIDATION" state).
+      - run: node scripts/generate-validation-summary.js
       - run: npx playwright test

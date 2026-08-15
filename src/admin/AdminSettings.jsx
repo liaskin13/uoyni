@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { LOCKBOX_CODES, VAULT_DISPLAY_NAMES } from "../config";
 import PSCWordmark from "../components/PSCWordmark";
+import { useValidationSummary, formatValidationSummary } from "../lib/useValidationSummary";
 import "./AdminSettings.css";
 
 const SECTIONS = [
@@ -10,6 +11,7 @@ const SECTIONS = [
 ];
 
 function SectionSystem({ waveformDetail, setWaveformDetail, trackColorRows, setTrackColorRows, quantizeEnabled, handleQuantizeToggle, autoLoopDefault, setAutoLoopDefault, smartCrates, setSmartCrates, historyEnabled, setHistoryEnabled }) {
+  const validationSummary = useValidationSummary(); // T13
   return (
     <div className="adm-section-body">
       <div className="adm-group">
@@ -75,6 +77,14 @@ function SectionSystem({ waveformDetail, setWaveformDetail, trackColorRows, setT
           >
             {historyEnabled ? "ENABLED" : "DISABLED"}
           </button>
+        </div>
+      </div>
+
+      <div className="adm-group">
+        <div className="adm-group-label">BEAT DETECTION</div>
+        <div className="adm-row">
+          <span className="adm-row-label">Validation Suite</span>
+          <span className="adm-row-value">{formatValidationSummary(validationSummary)}</span>
         </div>
       </div>
     </div>

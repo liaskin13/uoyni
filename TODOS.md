@@ -5,10 +5,49 @@ and enough context to pick it up cold.
 
 ---
 
-### Build the COMMS-box keyword-help system (BEATGRID v1)
+### Confidence meter — companion to T9's badge (deferred, not built)
 
-**Priority:** High — next session should start here.
-**Blocked by:** Nothing. Fully planned, not yet implemented.
+**Priority:** Low — revisit only if evidence says the badge alone isn't enough.
+**Blocked by:** Nothing technical. Blocked by lack of a real reason to build it yet.
+
+**What:** During PR3's `/plan-eng-review` (2026-08-15), T9 (BPM confidence
+badge on the deck header) grew a companion idea: `arch-deck-meta`'s existing
+`border-bottom` (currently a plain 1px hairline, `ArchitectConsole.css:464-471`)
+becoming an always-on confidence meter — ramped color, always visible,
+distinct from the badge's discrete on-demand text.
+
+**Why deferred:** fully designed, and its DESIGN.md-compliance question was
+even resolved (would have used the same 5-band SA palette T9's badge now
+uses) — then cut anyway, same session, on direct comparison to the
+2026-06-03 "vibe meter" failure (see `feedback_design_without_approval` in
+memory): an ambient colored element sitting next to information already
+precisely available as text (T9's badge shows the exact percentage) adds no
+real signal, just decoration. L caught this before building it, not after.
+
+**Context:** Only worth revisiting if real usage shows the plain badge
+number is too slow to scan at a glance once D's actually using it day to
+day — i.e. validated by observed need, not built ahead of it. If picked up:
+the SA 5-band palette mapping (`useAudioAnalyzer.js:55-82`, same bands as
+T9's badge) is the natural color source; keep it a genuine instrument-style
+meter (continuous reading), not a redundant restatement of the badge.
+
+**Depends on:** T9 shipping and being used for a while first.
+
+---
+
+### ~~Build the COMMS-box keyword-help system (BEATGRID v1)~~ — SHIPPED 2026-08-15
+
+**Status: built, tested (17/17 `ContextStrip.test.js` passing), live-verified**
+via an isolated component preview (typed BEATGRID → hint chip appeared →
+Enter opened the 5-line panel → Escape closed it, text preserved — all
+screenshotted, matching the spec below exactly). `npm run build` succeeds;
+`check:design` shows only the pre-existing, unrelated "Chakra Petch" font-name
+false positive (see lessons.md). DESIGN.md now has a "COMMS / REACH" section
+documenting this behavior. Next: the console-wide button/discoverability
+audit (see the "single hot-cue clear" item below) should produce the next
+COMMS-help topics — not ad hoc additions on top of this v1.
+
+**What (original spec, preserved for reference):**
 
 **What:** Let D type a keyword (e.g. `BEATGRID`) into the console's existing
 COMMS search input and press Enter to see contextual instructions, instead
@@ -337,6 +376,21 @@ may differ.
 **Related, broader scope (not yet its own TODO — needs shaping first):** L separately asked to consider a full review of all console buttons/controls — their functionality, discoverability (hints/tooltips), and whether the COMMS status LCD (`announceStatus()`, added 2026-07-22 session, sibling to the REACH LCD) is being used to its full intended potential for surfacing this kind of state/feedback. Worth a dedicated `/design-review` or `/office-hours` pass rather than folding into a single-cue-clear fix — the single-cue-clear gap is a good concrete example to bring INTO that review, not a substitute for it.
 
 **Update 2026-08-14:** first concrete instance of this now planned (not yet built) — see "Build the COMMS-box keyword-help system (BEATGRID v1)" at the top of this file.
+
+**Update 2026-08-15:** BEATGRID v1 shipped. This item now reduces to: run the
+console-wide button/control audit itself (still not scoped) — that audit is
+what should produce the next COMMS-help topics and inform whether/how HINTS
+surface across the console more broadly.
+
+**Update 2026-08-15 (later same day):** PR3's confidence badge, tap-tempo,
+explainability row, and validation-numbers panel all shipped (v1.4.0.0) —
+each with its own COMMS keyword-help topic (`TAP`, `VALIDATION`, alongside
+`BEATGRID`) as a first-class part of that work, not deferred to this audit.
+T12 (cross-instrument pulse) remains its own separate, not-yet-shipped PR.
+This TODO's remaining scope is now specifically the console-wide
+button/control audit itself — everything else that referenced it has
+landed. Sequencing decided 2026-08-15: run this audit as its own dedicated
+pass (`/design-review` or `/office-hours`).
 
 **Depends on:** Nothing technical. Needs a UX decision (with L/D) before building.
 
