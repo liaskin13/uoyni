@@ -336,9 +336,9 @@ export default function DeckWaveformV2({
         // multi-point data exists — a synthetic single flat-BPM segment
         // draws no markers, keeping the no-grid-points path byte-identical
         // to pre-multi-point-grid rendering) ─────────────────────────────
+        const isPlayingNow = getIsPlayingRef.current?.() ?? false;
         if (gridPoints && gridPoints.length > 0) {
           const sortedPoints = [...gridPoints].sort((a, b) => a.time - b.time);
-          const isPlayingNow = getIsPlayingRef.current?.() ?? false;
           const idleColor    = "rgba(240,237,232,0.55)";
           const dimOpacity   = 0.4;
 
@@ -384,6 +384,20 @@ export default function DeckWaveformV2({
             ctx.restore();
           });
           ctx.globalAlpha = 1;
+        } else if (!isPlayingNow) {
+          // ─── Idle discoverability hint — beatgrid editing (double-click
+          // to add an anchor, [/] to cycle, arrow keys to nudge) had zero
+          // on-screen affordance before this: 100% invisible until you
+          // already knew to type BEATGRID into COMMS. Only shows before
+          // the first anchor is set, so it never fights the anchor UI
+          // once discovered. Same idle-hint treatment as the onset-envelope
+          // row's "HOVER WAVEFORM TO INSPECT ENVELOPE" (console-wide
+          // button/discoverability audit, 2026-08-16).
+          ctx.font = "7px 'JetBrains Mono', monospace";
+          ctx.textAlign = "center";
+          ctx.fillStyle = "rgba(160,160,160,0.85)";
+          ctx.fillText("DOUBLE-CLICK TO SET BEATGRID", w / 2, 9);
+          ctx.textAlign = "left";
         }
 
         // ─── Transient "PAUSE TO EDIT GRID" cue ──────────────────────────
