@@ -16,7 +16,7 @@ function SectionSystem({ waveformDetail, setWaveformDetail, trackColorRows, setT
     <div className="adm-section-body">
       <div className="adm-group">
         <div className="adm-group-label">DISPLAY</div>
-        <div className="adm-row">
+        <div className="adm-row" title="HIGH renders the full-resolution waveform binary; LOW uses the lighter pre-rendered PNG">
           <span className="adm-row-label">Waveform Detail</span>
           <button
             className={`adm-toggle ${waveformDetail === "high" ? "active" : ""}`}
@@ -25,7 +25,7 @@ function SectionSystem({ waveformDetail, setWaveformDetail, trackColorRows, setT
             {waveformDetail.toUpperCase()}
           </button>
         </div>
-        <div className="adm-row">
+        <div className="adm-row" title="Color-code track rows by vault (mixes/original music/live sets)">
           <span className="adm-row-label">Track Color Rows</span>
           <button
             className={`adm-toggle ${trackColorRows ? "active" : ""}`}
@@ -38,7 +38,7 @@ function SectionSystem({ waveformDetail, setWaveformDetail, trackColorRows, setT
 
       <div className="adm-group">
         <div className="adm-group-label">PLAYBACK</div>
-        <div className="adm-row">
+        <div className="adm-row" title="Snap hot-cue placement and beatgrid edits to the nearest beat">
           <span className="adm-row-label">Quantize Default</span>
           <button
             className={`adm-toggle ${quantizeEnabled ? "active" : ""}`}
@@ -47,7 +47,7 @@ function SectionSystem({ waveformDetail, setWaveformDetail, trackColorRows, setT
             {quantizeEnabled ? "ON" : "OFF"}
           </button>
         </div>
-        <div className="adm-row">
+        <div className="adm-row" title="Reserved for a future default loop size — not yet wired to a behavior">
           <span className="adm-row-label">Auto Loop Default</span>
           <button
             className={`adm-toggle ${autoLoopDefault ? "active" : ""}`}
@@ -60,7 +60,7 @@ function SectionSystem({ waveformDetail, setWaveformDetail, trackColorRows, setT
 
       <div className="adm-group">
         <div className="adm-group-label">VAULT</div>
-        <div className="adm-row">
+        <div className="adm-row" title="Surfaces BPM/key-compatible tracks first in the library, relative to the loaded deck track. Same toggle as the SMART button in the track browser.">
           <span className="adm-row-label">Smart Crates</span>
           <button
             className={`adm-toggle ${smartCrates ? "active" : ""}`}
@@ -69,7 +69,7 @@ function SectionSystem({ waveformDetail, setWaveformDetail, trackColorRows, setT
             {smartCrates ? "ENABLED" : "DISABLED"}
           </button>
         </div>
-        <div className="adm-row">
+        <div className="adm-row" title="Log played tracks to your recently-played history">
           <span className="adm-row-label">Track History</span>
           <button
             className={`adm-toggle ${historyEnabled ? "active" : ""}`}

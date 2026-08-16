@@ -191,6 +191,45 @@ export function resolveTrackBpm(track) {
   return null;
 }
 
+// Smart Crates — Serato-style dynamic compatibility crate (console-wide
+// discoverability audit, 2026-08-16). Serato's real Smart Crates are a full
+// arbitrary-field rule builder (genre/comment/year/etc, Match All/Any) —
+// this schema (worker/schema.sql) has no genre/comment/year columns, and
+// musical_key is unpopulated freeform text for nearly every track (no
+// key-detection pipeline exists, unlike BPM which every track runs
+// through). Scoped to what's actually real: BPM compatibility is the
+// core signal; key is a bonus when it happens to be populated, never a
+// hard requirement. ±6% matches the standard CDJ/turntable pitch-fader
+// range DJs already think in.
+export const SMART_CRATE_BPM_TOLERANCE = 0.06;
+
+export function isBpmCompatible(bpmA, bpmB, tolerance = SMART_CRATE_BPM_TOLERANCE) {
+  if (!bpmA || !bpmB) return false;
+  const ratio = bpmA / bpmB;
+  return ratio >= 1 - tolerance && ratio <= 1 + tolerance;
+}
+
+// Exact-match only — not full Camelot-wheel adjacency. Key data is too
+// sparse in this library to justify parsing/normalizing arbitrary key
+// notation right now; revisit if a real key-detection pipeline ships.
+export function isKeyCompatible(keyA, keyB) {
+  if (!keyA || !keyB) return null; // unknown — neither match nor mismatch
+  return keyA.trim().toUpperCase() === keyB.trim().toUpperCase();
+}
+
+// 0 = not BPM-compatible (excluded from the crate). 1 = BPM match only.
+// 2 = BPM + key match, ranked first. Reference is typically the loaded
+// deck track — the "what can I mix into next" use case.
+export function smartCrateScore(track, referenceTrack) {
+  if (!track || !referenceTrack || track.id === referenceTrack.id) return 0;
+  const bpmMatch = isBpmCompatible(
+    resolveTrackBpm(track),
+    resolveTrackBpm(referenceTrack),
+  );
+  if (!bpmMatch) return 0;
+  return isKeyCompatible(track.musical_key, referenceTrack.musical_key) ? 2 : 1;
+}
+
 // Confidence badge color — 5 discrete 10%-wide bands, reusing the SA's
 // already-vetted palette verbatim (useAudioAnalyzer.js:55-82) rather than
 // inventing a new confidence-color scale. Discrete bands, not a gradient —
@@ -2181,6 +2220,11 @@ function ArchitectConsole({
     );
 
   const visibleTracks = [...filteredTracks].sort((a, b) => {
+    if (smartCrates && loadedTrack) {
+      const scoreDiff =
+        smartCrateScore(b, loadedTrack) - smartCrateScore(a, loadedTrack);
+      if (scoreDiff !== 0) return scoreDiff;
+    }
     if (sortMode === "bpm-desc")
       return (resolveTrackBpm(b) || 0) - (resolveTrackBpm(a) || 0);
     if (sortMode === "bpm-asc")
@@ -3530,6 +3574,17 @@ function ArchitectConsole({
             >
               <div className="arch-display-divider" aria-hidden="true" />
               <button
+                className={`arch-browser-btn ${smartCrates ? "active" : ""}`}
+                onClick={() => setSmartCrates((p) => !p)}
+                title={
+                  loadedTrack
+                    ? "SMART — surface tracks compatible with the loaded track (BPM within 6%, key match when known)"
+                    : "SMART — load a track to the deck first, then this surfaces its BPM/key-compatible matches"
+                }
+              >
+                SMART
+              </button>
+              <button
                 className={`arch-browser-btn ${loadedDeckId && selectedTrackId === loadedDeckId ? "active" : ""}`}
                 onClick={handleLoadDeck}
                 title="LOAD DECK — load selected track to the deck (or double-click a track row)"
@@ -3768,6 +3823,10 @@ function ArchitectConsole({
                 visibleTracks.map((t, i) => {
                   const isLive = Boolean(t.is_published);
                   const isEditing = editingTrackId === t.id;
+                  const isSmartMatch =
+                    smartCrates &&
+                    loadedTrack &&
+                    smartCrateScore(t, loadedTrack) > 0;
                   return (
                     <div
                       key={t.id}
@@ -3775,6 +3834,7 @@ function ArchitectConsole({
                       role="row"
                       tabIndex={0}
                       aria-selected={selectedTrackId === t.id}
+                      title="Click to select. Double-click to load to deck."
                       style={{ "--row-i": i }}
                       onClick={() => handleTrackSelect(t)}
                       onDoubleClick={() => handleTrackDoubleClick(t)}
@@ -3801,6 +3861,14 @@ function ArchitectConsole({
                         />
                       </span>
                       <span className="arch-track-title" role="cell">
+                        {isSmartMatch && (
+                          <span
+                            className="arch-smart-match-badge"
+                            title="SMART match — BPM (and key, if known) compatible with the loaded track"
+                          >
+                            MATCH
+                          </span>
+                        )}
                         {isEditing ? (
                           <input
                             className="arch-track-edit-input"
@@ -4448,7 +4516,10 @@ function ArchitectConsole({
             <div className="arch-panel-body arch-settings-body">
               <section className="arch-settings-section">
                 <h4 className="arch-settings-title">DISPLAY</h4>
-                <div className="arch-settings-row">
+                <div
+                  className="arch-settings-row"
+                  title="Color-code track rows by vault (mixes/original music/live sets)"
+                >
                   <span>Track Color Rows</span>
                   <button
                     className={`arch-settings-toggle ${trackColorRows ? "active" : ""}`}
@@ -4460,7 +4531,10 @@ function ArchitectConsole({
               </section>
               <section className="arch-settings-section">
                 <h4 className="arch-settings-title">PLAYBACK</h4>
-                <div className="arch-settings-row">
+                <div
+                  className="arch-settings-row"
+                  title="Snap hot-cue placement and beatgrid edits to the nearest beat"
+                >
                   <span>Quantize</span>
                   <button
                     className={`arch-settings-toggle ${quantizeEnabled ? "active" : ""}`}
@@ -4469,7 +4543,10 @@ function ArchitectConsole({
                     {quantizeEnabled ? "ON" : "OFF"}
                   </button>
                 </div>
-                <div className="arch-settings-row">
+                <div
+                  className="arch-settings-row"
+                  title="Reserved for a future default loop size — not yet wired to a behavior"
+                >
                   <span>Auto Loop Default</span>
                   <button
                     className={`arch-settings-toggle ${autoLoopDefault ? "active" : ""}`}
@@ -4481,7 +4558,10 @@ function ArchitectConsole({
               </section>
               <section className="arch-settings-section">
                 <h4 className="arch-settings-title">VAULT</h4>
-                <div className="arch-settings-row">
+                <div
+                  className="arch-settings-row"
+                  title="Surfaces BPM/key-compatible tracks first in the library, relative to the loaded deck track. Same toggle as the SMART button in the track browser."
+                >
                   <span>Smart Crates</span>
                   <button
                     className={`arch-settings-toggle ${smartCrates ? "active" : ""}`}
@@ -4490,7 +4570,10 @@ function ArchitectConsole({
                     {smartCrates ? "ENABLED" : "DISABLED"}
                   </button>
                 </div>
-                <div className="arch-settings-row">
+                <div
+                  className="arch-settings-row"
+                  title="Log played tracks to your recently-played history"
+                >
                   <span>Track History</span>
                   <button
                     className={`arch-settings-toggle ${historyEnabled ? "active" : ""}`}

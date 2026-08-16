@@ -2305,6 +2305,20 @@
   text-overflow: ellipsis;
 }
 
+/* SMART crate compatibility badge — same anatomy as the detected-BPM
+   confidence badge (border + small caps text), identity-colored so it
+   reads as "this fits what's already playing," not an error/warning. */
+.arch-smart-match-badge {
+  display: inline-block;
+  border: 1px solid var(--arch-identity, var(--arch-accent));
+  color: var(--arch-identity, var(--arch-accent));
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.56rem;
+  letter-spacing: 0.04em;
+  padding: 1px 4px;
+  margin-right: 4px;
+}
+
 .arch-track-artist {
   font-size: 0.65rem;
   color: rgba(var(--arch-accent-rgb), 0.75);
