@@ -21,13 +21,13 @@ describe("COMMS LCD — idle / searching", () => {
   it("shows the COMMS label and a search input when there is no status", () => {
     renderStrip();
     expect(screen.getByText("COMMS")).toBeTruthy();
-    expect(screen.getByPlaceholderText("SEARCH VAULT")).toBeTruthy();
+    expect(screen.getByPlaceholderText("SEARCH · OR TYPE HELP")).toBeTruthy();
   });
 
   it("calls onSearchChange as the user types", () => {
     const onSearchChange = vi.fn();
     renderStrip({ onSearchChange });
-    fireEvent.change(screen.getByPlaceholderText("SEARCH VAULT"), {
+    fireEvent.change(screen.getByPlaceholderText("SEARCH · OR TYPE HELP"), {
       target: { value: "eightysixty" },
     });
     expect(onSearchChange).toHaveBeenCalledWith("eightysixty");
@@ -63,7 +63,7 @@ describe("COMMS LCD — system status overlay", () => {
       systemStatus: { message: "2 tracks moved → ORIGINAL MUSIC.", kind: "success" },
     });
     expect(screen.getByText("2 tracks moved → ORIGINAL MUSIC.")).toBeTruthy();
-    expect(screen.queryByPlaceholderText("SEARCH VAULT")).toBeNull();
+    expect(screen.queryByPlaceholderText("SEARCH · OR TYPE HELP")).toBeNull();
   });
 
   it("applies the error status class for kind: error", () => {
@@ -85,13 +85,13 @@ describe("COMMS LCD — system status overlay", () => {
       libSearch: "eighty",
       systemStatus: { message: "Saved.", kind: "success" },
     });
-    expect(screen.queryByPlaceholderText("SEARCH VAULT")).toBeNull();
+    expect(screen.queryByPlaceholderText("SEARCH · OR TYPE HELP")).toBeNull();
 
     rerender(
       React.createElement(ContextStrip, { libSearch: "eighty", systemStatus: null }),
     );
 
-    const input = screen.getByPlaceholderText("SEARCH VAULT");
+    const input = screen.getByPlaceholderText("SEARCH · OR TYPE HELP");
     expect(input.value).toBe("eighty");
   });
 });
@@ -122,21 +122,21 @@ describe("COMMS LCD — keyword help (BEATGRID v1)", () => {
 
   it("Enter on a matched topic opens the body with its instructions", () => {
     renderStrip({ libSearch: "BEATGRID" });
-    fireEvent.keyDown(screen.getByPlaceholderText("SEARCH VAULT"), { key: "Enter" });
+    fireEvent.keyDown(screen.getByPlaceholderText("SEARCH · OR TYPE HELP"), { key: "Enter" });
     expect(screen.getByText("BEATGRID")).toBeTruthy();
     expect(screen.getByText("[ and ] cycle which anchor is selected.")).toBeTruthy();
   });
 
   it("matching is case-insensitive and trims whitespace", () => {
     renderStrip({ libSearch: "  beatgrid  " });
-    fireEvent.keyDown(screen.getByPlaceholderText("SEARCH VAULT"), { key: "Enter" });
+    fireEvent.keyDown(screen.getByPlaceholderText("SEARCH · OR TYPE HELP"), { key: "Enter" });
     expect(screen.getByText("Double-click empty waveform space to add an anchor, snapped to the nearest beat.")).toBeTruthy();
   });
 
   it("Escape closes the help body without clearing the search text", () => {
     const onSearchChange = vi.fn();
     renderStrip({ libSearch: "BEATGRID", onSearchChange });
-    const input = screen.getByPlaceholderText("SEARCH VAULT");
+    const input = screen.getByPlaceholderText("SEARCH · OR TYPE HELP");
     fireEvent.keyDown(input, { key: "Enter" });
     expect(screen.getByText("[ and ] cycle which anchor is selected.")).toBeTruthy();
     fireEvent.keyDown(input, { key: "Escape" });
@@ -146,19 +146,19 @@ describe("COMMS LCD — keyword help (BEATGRID v1)", () => {
 
   it("re-searching a different topic while the help body is already open switches to it", () => {
     const { rerender } = renderStrip({ libSearch: "BEATGRID" });
-    const input = screen.getByPlaceholderText("SEARCH VAULT");
+    const input = screen.getByPlaceholderText("SEARCH · OR TYPE HELP");
     fireEvent.keyDown(input, { key: "Enter" });
     expect(screen.getByText("[ and ] cycle which anchor is selected.")).toBeTruthy();
 
     rerender(React.createElement(ContextStrip, { libSearch: "TAP" }));
-    fireEvent.keyDown(screen.getByPlaceholderText("SEARCH VAULT"), { key: "Enter" });
+    fireEvent.keyDown(screen.getByPlaceholderText("SEARCH · OR TYPE HELP"), { key: "Enter" });
     expect(screen.getByText("Needs at least 4 taps — fewer shows \"keep tapping…\" and resets.")).toBeTruthy();
     expect(screen.queryByText("[ and ] cycle which anchor is selected.")).toBeNull();
   });
 
   it("Enter on a non-matching query is a true no-op — no panel opens", () => {
     const { container } = renderStrip({ libSearch: "not a real topic" });
-    fireEvent.keyDown(screen.getByPlaceholderText("SEARCH VAULT"), { key: "Enter" });
+    fireEvent.keyDown(screen.getByPlaceholderText("SEARCH · OR TYPE HELP"), { key: "Enter" });
     expect(container.querySelector(".arch-context-help")).toBeNull();
     expect(container.querySelector(".is-open")).toBeNull();
   });
@@ -168,7 +168,7 @@ describe("COMMS LCD — keyword help (BEATGRID v1)", () => {
     fireEvent.click(screen.getByLabelText("PSC navigation"));
     expect(screen.getByText("VAULTS")).toBeTruthy();
 
-    fireEvent.keyDown(screen.getByPlaceholderText("SEARCH VAULT"), { key: "Escape" });
+    fireEvent.keyDown(screen.getByPlaceholderText("SEARCH · OR TYPE HELP"), { key: "Escape" });
     expect(screen.getByText("VAULTS")).toBeTruthy();
   });
 });
@@ -181,7 +181,7 @@ describe("COMMS LCD — keyword help (T10, TAP topic)", () => {
 
   it("Enter on TAP opens the body with its instructions, same behavior as BEATGRID", () => {
     renderStrip({ libSearch: "TAP" });
-    fireEvent.keyDown(screen.getByPlaceholderText("SEARCH VAULT"), { key: "Enter" });
+    fireEvent.keyDown(screen.getByPlaceholderText("SEARCH · OR TYPE HELP"), { key: "Enter" });
     expect(screen.getByText("TAP")).toBeTruthy();
     expect(
       screen.getByText("Needs at least 4 taps — fewer shows \"keep tapping…\" and resets."),

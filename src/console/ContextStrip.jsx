@@ -77,7 +77,7 @@ export default function ContextStrip({
             <span className="arch-comms-lcd-screen arch-context-search">
               <input
                 className="arch-context-search-input"
-                placeholder="SEARCH VAULT"
+                placeholder="SEARCH · OR TYPE HELP"
                 value={libSearch}
                 onChange={(e) => onSearchChange?.(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
