@@ -410,6 +410,35 @@ export function enqueueWaveformGeneration(track, queueRef, runQueueFn) {
   runQueueFn();
 }
 
+// Extracted for unit testing — starts a requestAnimationFrame loop that seeks
+// engine back to loopRegion.start whenever playback crosses loopRegion.end.
+// Polls engine.getState() directly instead of engine.onStateChange (which is
+// driven by the browser's "timeupdate" event): timeupdate fires only every
+// 15-250ms per the WHATWG spec (measured ~265ms avg in Chromium), so a
+// timeupdate-driven check only notices the crossing after playback has
+// already overshot the loop point by up to that interval — audible as a
+// break at the loop boundary, and for short quantized loops (down to 1/8
+// note, ~117ms at 128 BPM) the overshoot can exceed the whole loop length.
+// rAF polls at display refresh rate (~16ms), cutting that overshoot ~94%.
+export function startLoopEnforcement(
+  loopRegion,
+  loopActiveRef,
+  engine,
+  raf = requestAnimationFrame,
+  caf = cancelAnimationFrame,
+) {
+  let rafId;
+  const tick = () => {
+    const { currentTime: ct, isPlaying: playing } = engine.getState();
+    if (playing && loopActiveRef.current && ct >= loopRegion.end) {
+      engine.seek(loopRegion.start);
+    }
+    rafId = raf(tick);
+  };
+  rafId = raf(tick);
+  return () => caf(rafId);
+}
+
 function vaultLabel(id) {
   if (!id) return "—";
   if (id.startsWith(LOCKBOX_PREFIX))
@@ -2117,17 +2146,14 @@ function ArchitectConsole({
     announce(`Hot cue ${displayNum} cleared.`);
   };
 
-  // Loop enforcement — seeks back to loopRegion.start when playhead passes loopRegion.end
+  // Loop enforcement — see startLoopEnforcement above for why this is
+  // rAF-polled rather than driven by the "timeupdate" listener. Still not
+  // sample-accurate (seek() and the loop-point itself aren't guaranteed
+  // zero-crossing) — tracked as a follow-up for a true gapless engine.
   useEffect(() => {
     if (loopRegion.start === null || loopRegion.end === null) return;
     loopActiveRef.current = true;
-    return audioEngine.onStateChange(
-      ({ currentTime: ct, isPlaying: playing }) => {
-        if (playing && loopActiveRef.current && ct >= loopRegion.end) {
-          audioEngine.seek(loopRegion.start);
-        }
-      },
-    );
+    return startLoopEnforcement(loopRegion, loopActiveRef, audioEngine);
   }, [loopRegion]);
 
   const handleClearBankCues = () => {
