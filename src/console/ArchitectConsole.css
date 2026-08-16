@@ -1903,6 +1903,29 @@
   line-height: 1;
 }
 
+.arch-shortcuts-trigger {
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(185, 195, 200, 0.7);
+  background: none;
+  border: 1px solid rgba(185, 195, 200, 0.3);
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  margin-left: 6px;
+  align-self: center;
+  line-height: 1;
+  transition: color 120ms, border-color 120ms;
+}
+
+.arch-shortcuts-trigger:hover {
+  color: var(--arch-identity, rgba(240, 237, 232, 0.95));
+  border-color: var(--arch-identity, rgba(240, 237, 232, 0.5));
+}
+
 .arch-intake-tab-btn:hover {
   color: var(--arch-identity, #00e5ff);
   border-color: var(--arch-identity, #00e5ff);

@@ -420,7 +420,7 @@ const SR_ONLY_STYLE = {
   border: 0,
 };
 
-function EventHorizonPanel({ architectArchive, onRestore }) {
+function EventHorizonPanel({ architectArchive, onRestore, onClose }) {
   return (
     <motion.div
       id="arch-event-horizon-panel"
@@ -440,8 +440,15 @@ function EventHorizonPanel({ architectArchive, onRestore }) {
           ARCHIVE LOG
         </span>
         <span id="arch-archive-sub" className="arch-panel-sub">
-          Secure stasis layer — Architect access only
+          Secure stasis layer — soft-deleted items, restorable
         </span>
+        <button
+          className="arch-panel-close"
+          onClick={onClose}
+          aria-label="Close archive log"
+        >
+          ✕
+        </button>
       </div>
 
       <div className="arch-horizon-entries">
@@ -3305,6 +3312,7 @@ function ArchitectConsole({
               className="arch-loop-btn"
               disabled={loopRegion.start === null}
               onClick={handleClearLoop}
+              title="CLR — clear the active loop region"
             >
               CLR
             </button>
@@ -3316,10 +3324,18 @@ function ArchitectConsole({
           >
             + INTAKE
           </button>
+          <button
+            className="arch-shortcuts-trigger"
+            onClick={() => setShowShortcuts((v) => !v)}
+            aria-label="Keyboard shortcuts"
+            title="Show keyboard shortcuts"
+          >
+            ?
+          </button>
         </div>
       </div>
 
-      {/* Keyboard shortcut legend — toggled by ? key */}
+      {/* Keyboard shortcut legend — toggled by ? key or the ? button above */}
       {showShortcuts && (
         <div
           className="arch-shortcut-legend"
@@ -3328,7 +3344,8 @@ function ArchitectConsole({
         >
           SPACE play/pause&nbsp;&nbsp;·&nbsp;&nbsp;L
           load&nbsp;&nbsp;·&nbsp;&nbsp;` cue&nbsp;&nbsp;·&nbsp;&nbsp;1–8
-          pads&nbsp;&nbsp;·&nbsp;&nbsp;← → seek ±5s&nbsp;&nbsp;·&nbsp;&nbsp;ESC
+          pads&nbsp;&nbsp;·&nbsp;&nbsp;← → seek 1 beat&nbsp;&nbsp;·&nbsp;&nbsp;↑
+          ↓ zoom (hover waveform/overview)&nbsp;&nbsp;·&nbsp;&nbsp;ESC
           dismiss&nbsp;&nbsp;·&nbsp;&nbsp;? close
         </div>
       )}
@@ -4744,6 +4761,7 @@ function ArchitectConsole({
             <EventHorizonPanel
               architectArchive={architectArchive}
               onRestore={restoreItem}
+              onClose={() => setShowArchive(false)}
             />
           </>
         )}
@@ -4993,7 +5011,20 @@ function ArchitectConsole({
                   <div>SERVER: rtmps://live.cloudflare.com:443/live/</div>
                   <div
                     className="signal-panel-key-row"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setStreamKeyRevealed((v) => !v)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setStreamKeyRevealed((v) => !v);
+                      }
+                    }}
+                    aria-label={
+                      streamKeyRevealed
+                        ? "Stream key revealed — click to hide"
+                        : "Stream key hidden — click to reveal"
+                    }
                     title={
                       streamKeyRevealed
                         ? "Click to hide"
