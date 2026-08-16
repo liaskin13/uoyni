@@ -452,3 +452,19 @@ Captures patterns, mistakes, and corrections to prevent "Shadow Gaps" from repea
 - **Lesson**: A confidence-badge color law ("always neutral, never red/green-coded") was correctly flagged as violated by an outside-voice review, then explicitly overridden by the user ("my word is law... there are colours in the VU AND WF AND SA"). The override turned out to be well-reasoned on its own terms too (the rule was meant for static chrome, not genuine instrument-style meters) — but the override itself was the user's call to make regardless.
 - **Rule**: When the user directs an explicit override of a documented DESIGN.md rule, comply — don't keep re-litigating after they've decided. But the override must be written back into DESIGN.md itself (dated, with reasoning), not left as a silent contradiction between what's documented and what's actually built — that's exactly the kind of drift that's caused confusion in past sessions (see the `--text-muted` stale-value incident, 2026-08-14).
 - **How to apply**: Owner override of a design law → update DESIGN.md's rule text AND its Decisions Log in the same session, with the date and the reasoning given. Never just build the exception and leave the doc stale.
+
+---
+
+## Session: /design-review contrast audit + button/discoverability audit scoping (2026-08-16)
+
+#### The Screenshot-Visibility Lesson Recurred — Environment Doesn't Excuse Skipping It
+
+- **Lesson**: Same mistake as the 2026-08-15 entry above, verbatim: ran a `/design-review` contrast pass, took before/after screenshots with the browse tool, read them with the Read tool myself, and narrated them ("look at SIGNAL, B/C/D...") as if the user had seen them. They hadn't — this user's environment only lets them review changes once deployed live ("i cant see anything... i can only see once its deployed live"). Caught only because the user said so directly, not because I checked first.
+- **Rule**: A logged lesson recurring once is a signal the "how to apply" step was never actually built into the workflow — it was just remembered as a fact, not a checkpoint. For this user specifically: screenshots taken during work are for *my* verification only; they cannot substitute for showing the user anything. The user's own review loop is the deployed site, not chat images.
+- **How to apply**: Before describing visual results to this user, ask: has this been deployed (or otherwise published somewhere they can actually open)? If not, either deploy first or explicitly say "you won't be able to see this until it's deployed — want me to push it live?" rather than walking through screenshots as if shared.
+
+#### `tasks/lessons.md` Session-Start Read Was Skipped Again Mid-Session
+
+- **Lesson**: Ran a full `/design-review` pass, made two commits, and pushed to production — all before reading `tasks/lessons.md`, which CLAUDE.md's session-start checklist requires as step 1 and which already contains an entry (2026-08-12) explicitly warning that skipping this file is a recurring failure mode. Only read it when the user asked a follow-up question and referenced "lessons or context-restore" directly.
+- **Rule**: Invoking a skill (`/design-review`) does not substitute for the session-start checklist — same conclusion the 2026-08-12 entry already reached about `/context-restore`. Skills load their own preamble/context; none of them read this project's `tasks/lessons.md` or `NEXT_SESSION.md` for you.
+- **How to apply**: Read `tasks/lessons.md` and `NEXT_SESSION.md` before the first substantive action of a session — before invoking any skill, not just before writing code directly. If a skill was already invoked before this happens, stop and read them at the next natural pause, not only when the user has to ask.
