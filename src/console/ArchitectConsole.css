@@ -357,7 +357,7 @@
 .arch-signal-btn {
   background: transparent;
   border: 1px solid rgba(var(--arch-muted-rgb), 0.22);
-  color: rgba(var(--arch-muted-rgb), 0.55);
+  color: rgba(var(--arch-muted-rgb), 0.75);
   font-family: var(--font-ui);
   font-size: 9px;
   font-weight: 600;
@@ -1064,7 +1064,7 @@
   padding: 0 12px;
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.38);
+  color: rgba(255, 255, 255, 0.55);
   font-family: 'Chakra Petch', sans-serif;
   font-size: 11px;
   text-transform: uppercase;
@@ -1219,7 +1219,7 @@
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
-  color: rgba(var(--arch-muted-rgb), 0.45);
+  color: rgba(var(--arch-muted-rgb), 0.75);
   font-family: var(--font-ui, 'Chakra Petch', sans-serif);
   font-size: 0.58rem;
   font-weight: 600;
@@ -1797,7 +1797,7 @@
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.03),
     inset 0 -1px 0 rgba(0, 0, 0, 0.3);
-  color: rgba(var(--arch-muted-rgb), 0.35);
+  color: rgba(var(--arch-muted-rgb), 0.75);
   padding: 8px 18px;
   font-family: 'Chakra Petch', sans-serif;
   font-size: 0.65rem;
@@ -1868,9 +1868,9 @@
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(185, 195, 200, 0.40);
+  color: rgba(185, 195, 200, 0.80);
   background: none;
-  border: 1px solid rgba(185, 195, 200, 0.12);
+  border: 1px solid rgba(185, 195, 200, 0.35);
   cursor: pointer;
   flex-shrink: 0;
   padding: 0 12px;
@@ -1917,7 +1917,7 @@
   padding: 0 10px;
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.38);
+  color: rgba(255, 255, 255, 0.55);
   font-family: 'Chakra Petch', sans-serif;
   font-size: 11px;
   letter-spacing: 0.08em;
