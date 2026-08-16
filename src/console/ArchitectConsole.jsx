@@ -2896,7 +2896,7 @@ function ArchitectConsole({
           <span style={{
             position: "absolute", top: 2, right: 6,
             fontSize: "8px", letterSpacing: "0.12em",
-            color: "rgba(255,255,255,0.25)", pointerEvents: "none",
+            color: "rgba(255,255,255,0.5)", pointerEvents: "none",
             fontFamily: "'JetBrains Mono', monospace",
           }}>
             {OVERVIEW_STYLES[overviewStyle]} ↑↓

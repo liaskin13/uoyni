@@ -2011,7 +2011,7 @@
 
 .arch-vault-count {
   font-size: 0.55rem;
-  opacity: 0.5;
+  opacity: 0.95;
   margin-left: 4px;
   font-family: 'JetBrains Mono', monospace;
 }
@@ -2261,7 +2261,7 @@
 
 .arch-track-artist {
   font-size: 0.65rem;
-  color: rgba(var(--arch-accent-rgb), 0.45);
+  color: rgba(var(--arch-accent-rgb), 0.75);
   letter-spacing: 0.06em;
   white-space: nowrap;
   overflow: hidden;
@@ -2352,7 +2352,7 @@
 
 .arch-track-staged .arch-track-title span,
 .arch-track-staged .arch-track-artist span {
-  opacity: 0.55;
+  opacity: 0.85;
 }
 
 .arch-track-live {
@@ -2405,7 +2405,7 @@
 }
 
 .arch-track-staged .arch-track-state {
-  color: rgba(140, 140, 140, 0.5);
+  color: rgba(140, 140, 140, 0.9);
 }
 
 .arch-track-live .arch-track-state {
