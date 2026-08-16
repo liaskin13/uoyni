@@ -585,6 +585,7 @@ function ArchitectConsole({
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const [showPowerConfirm, setShowPowerConfirm] = useState(false);
   const [showVoidConfirm, setShowVoidConfirm] = useState(false);
+  const [revokeConfirmId, setRevokeConfirmId] = useState(null);
   const [showTrackList, setShowTrackList] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAccessCodes, setShowAccessCodes] = useState(false);
@@ -2931,6 +2932,7 @@ function ArchitectConsole({
         <div
           className="arch-overview-row"
           aria-hidden="true"
+          title="Click to seek. Hover here and press ↑↓ to cycle overview render style (LAYERS/OUTLINE/TRACES)."
           style={{ position: "relative" }}
           onMouseEnter={() => { overviewHoveredRef.current = true; }}
           onMouseLeave={() => { overviewHoveredRef.current = false; }}
@@ -2959,6 +2961,7 @@ function ArchitectConsole({
           <div className="arch-waveform-col">
             <div
               className="arch-waveform-main"
+              title="Hover here and press ↑↓ to zoom the waveform in/out"
               onMouseEnter={() => {
                 waveformHoveredRef.current = true;
               }}
@@ -3447,6 +3450,7 @@ function ArchitectConsole({
             className={`arch-rail-toggle ${showMatrix ? "active" : ""} ${matrixArmed ? "arch-armed" : ""}`}
             onClick={toggleMatrix}
             aria-expanded={showMatrix}
+            title="CMD MATRIX — permission grid for member tiers"
           >
             <span className="arch-rail-icon">⊞</span>
             CMD MATRIX
@@ -3491,13 +3495,18 @@ function ArchitectConsole({
           <div className="arch-rail-divider" />
           <div className="arch-rail-section-label">COMMAND</div>
 
-          <button className="arch-rail-cmd" onClick={handleExplore}>
+          <button
+            className="arch-rail-cmd"
+            onClick={handleExplore}
+            title="Open this vault directly (same as clicking its tab)"
+          >
             OPEN {commandVaultId ? `→ ${vaultLabel(commandVaultId)}` : "VAULT"}
           </button>
           <button
             className="arch-rail-cmd arch-rail-void"
             disabled={!commandVaultId}
             onClick={handleVoidProtocol}
+            title="Archive this vault's placeholder record — not related to track VOID in the track browser"
           >
             VOID PROTOCOL
           </button>
@@ -3931,7 +3940,10 @@ function ArchitectConsole({
                             onClick={(e) => e.stopPropagation()}
                           />
                         ) : (
-                          <span onDoubleClick={(e) => handleEditStart(e, t)}>
+                          <span
+                            onDoubleClick={(e) => handleEditStart(e, t)}
+                            title="Double-click to edit"
+                          >
                             {t.artist || "—"}
                           </span>
                         )}
@@ -4076,6 +4088,7 @@ function ArchitectConsole({
                               fontFamily: "'Chakra Petch', monospace",
                               letterSpacing: "0.08em",
                             }}
+                            title="Waveform generating"
                           >
                             {waveformProgress[t.id] != null
                               ? `${waveformProgress[t.id]}%`
@@ -4088,6 +4101,7 @@ function ArchitectConsole({
                               color: "rgba(0,204,102,0.7)",
                               fontSize: "0.55rem",
                             }}
+                            title="Waveform ready (V2)"
                           >
                             ▪
                           </span>
@@ -4108,6 +4122,7 @@ function ArchitectConsole({
                               color: "rgba(240,237,232,0.2)",
                               fontSize: "0.55rem",
                             }}
+                            title="No waveform generated yet"
                           >
                             —
                           </span>
@@ -4220,6 +4235,7 @@ function ArchitectConsole({
                           role="button"
                           aria-pressed={rosterReveal === m.id}
                           aria-label={`Member ${m.name} access code`}
+                          title="Hover or focus to reveal this member's access code"
                           onKeyDown={(e) => {
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
@@ -4363,7 +4379,11 @@ function ArchitectConsole({
               </span>
               <div className="arch-matrix-interlocks">
                 {!matrixArmed ? (
-                  <button className="arch-matrix-arm" onClick={handleMatrixArm}>
+                  <button
+                    className="arch-matrix-arm"
+                    onClick={handleMatrixArm}
+                    title="Arm this grid for editing — must arm before any permission change applies"
+                  >
                     ARM
                   </button>
                 ) : (
@@ -4372,12 +4392,14 @@ function ArchitectConsole({
                       className="arch-matrix-commit"
                       onClick={handleMatrixCommit}
                       disabled={Object.keys(matrixPending).length === 0}
+                      title="Commit the armed permission changes"
                     >
                       COMMIT
                     </button>
                     <button
                       className="arch-matrix-cancel"
                       onClick={handleMatrixDisarm}
+                      title="Discard armed, uncommitted changes — nothing is saved"
                     >
                       CANCEL
                     </button>
@@ -4387,6 +4409,7 @@ function ArchitectConsole({
                   className="arch-matrix-rollback"
                   onClick={handleMatrixRollback}
                   disabled={matrixHistory.length === 0}
+                  title="Revert the most recent committed change"
                 >
                   ROLLBACK
                 </button>
@@ -4754,6 +4777,7 @@ function ArchitectConsole({
                       key={t}
                       className={`arch-ac-tier-btn${acTier === t ? " active" : ""}`}
                       onClick={() => setAcTier(t)}
+                      title={`Choose ${t} as the tier this code grants`}
                     >
                       {t}
                     </button>
@@ -4781,6 +4805,7 @@ function ArchitectConsole({
                   className="arch-ac-generate"
                   disabled={acWorking}
                   onClick={handleGenerateCode}
+                  title="Generate a new access code for the selected tier"
                 >
                   {acWorking ? "GENERATING..." : "GENERATE CODE"}
                 </button>
@@ -4792,6 +4817,7 @@ function ArchitectConsole({
                       onClick={() =>
                         navigator.clipboard.writeText(acResult.url)
                       }
+                      title="Copy this code's URL to clipboard"
                     >
                       COPY
                     </button>
@@ -4821,7 +4847,8 @@ function ArchitectConsole({
                     </div>
                     <button
                       className="arch-ac-revoke"
-                      onClick={() => handleRevokeCode(c.id)}
+                      onClick={() => setRevokeConfirmId(c.id)}
+                      title="Revoke this code — immediate and cannot be undone"
                     >
                       REVOKE
                     </button>
@@ -4995,6 +5022,47 @@ function ArchitectConsole({
                 <button
                   className="arch-confirm-no"
                   onClick={() => setShowVoidConfirm(false)}
+                >
+                  CANCEL
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+        {revokeConfirmId && (
+          <motion.div
+            className="arch-confirm-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div
+              className="arch-confirm-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="arch-revoke-title"
+              aria-describedby="arch-revoke-msg"
+            >
+              <div id="arch-revoke-title" className="arch-confirm-title">
+                REVOKE THIS CODE?
+              </div>
+              <div id="arch-revoke-msg" className="arch-confirm-msg">
+                Immediate and cannot be undone. Anyone holding this code
+                loses access right away.
+              </div>
+              <div className="arch-confirm-btns">
+                <button
+                  className="arch-confirm-yes"
+                  onClick={() => {
+                    handleRevokeCode(revokeConfirmId);
+                    setRevokeConfirmId(null);
+                  }}
+                >
+                  CONFIRM
+                </button>
+                <button
+                  className="arch-confirm-no"
+                  onClick={() => setRevokeConfirmId(null)}
                 >
                   CANCEL
                 </button>
