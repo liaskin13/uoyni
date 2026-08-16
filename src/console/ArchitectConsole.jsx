@@ -3152,6 +3152,16 @@ function ArchitectConsole({
                     onDoubleClick={handleDblClick}
                     style={{ "--cue-color": color }}
                   >
+                    {cue && !isEditing && (
+                      <span
+                        className="arch-hotcue-clear"
+                        role="button"
+                        aria-label={`Clear hot cue ${displayNum}`}
+                        onClick={(e) => clearHotCue(displayNum, e)}
+                      >
+                        ×
+                      </span>
+                    )}
                     {isEditing ? (
                       <input
                         className="arch-hotcue-input"
@@ -3514,6 +3524,7 @@ function ArchitectConsole({
                 onClick={() =>
                   setPublishFilter((p) => (p === "staged" ? "all" : "staged"))
                 }
+                title="STAGED — show only unpublished tracks"
               >
                 STAGED
               </button>
@@ -3522,12 +3533,14 @@ function ArchitectConsole({
                 onClick={() =>
                   setPublishFilter((p) => (p === "live" ? "all" : "live"))
                 }
+                title="LIVE — show only published tracks"
               >
                 LIVE
               </button>
               <button
-                className={`arch-browser-btn ${historyEnabled ? "active" : ""}`}
-                onClick={() => setHistoryEnabled((prev) => !prev)}
+                className={`arch-browser-btn ${publishFilter === "all" ? "active" : ""}`}
+                onClick={() => setPublishFilter("all")}
+                title="HISTORY — show all tracks, newest first"
               >
                 HISTORY
               </button>
