@@ -209,7 +209,17 @@ specific gap already tracked elsewhere in this file.
 
 ---
 
-### HISTORY track-list filter button doesn't respond when switching from STAGED/LIVE
+### ~~HISTORY track-list filter button doesn't respond when switching from STAGED/LIVE~~ — FIXED 2026-08-16
+
+**Status: fixed, tested, live.** Root cause (source-read, not the stale-closure
+guess below): HISTORY's `onClick` called `setHistoryEnabled`, a totally
+unrelated Settings preference for played-track logging — not `publishFilter`,
+which STAGED/LIVE actually use and which `filteredTracks` filters on.
+`filteredTracks` had no `"history"` branch at all. Rewired to
+`setPublishFilter("all")`, matching the fresh-load view it originally looked
+like it represented. `historyEnabled` and its Settings toggle are untouched —
+real, separate, working feature. Verified live: STAGED→LIVE→HISTORY now
+correctly changes rows every time.
 
 **Priority:** Medium
 **Blocked by:** Nothing.
@@ -362,7 +372,25 @@ may differ.
 
 ---
 
-### No way to clear a single hot cue — only clear ALL
+### ~~No way to clear a single hot cue — only clear ALL~~ — FIXED 2026-08-16, plus the full console-wide audit this item spawned
+
+**Status: fixed, tested, live — and the "related, broader scope" note below (the
+console-wide button/discoverability audit) also ran and shipped in full.**
+Investigation found a per-cue clear mechanism already existed on 3 of 4 banks
+(double-click-twice-within-3s), just totally undiscoverable — zero visual hint
+before you tried it. Bank D had a real, total gap: double-click there is fully
+claimed by the cue-rename feature. Fix: every occupied pad now shows a small
+always-visible `×` (not hover-gated), wired to the existing bank-agnostic
+`clearHotCue`. Works on all 4 banks, including D for the first time. See
+DESIGN.md's new "Hot Cues" section.
+
+The broader audit this spawned (see updates below) also shipped: HISTORY
+filter bug fixed, COMMS keyword-help made discoverable, `?` shortcuts trigger
+added, beatgrid idle hint added, Smart Crates implemented for real (was a
+dead toggle, found while writing this audit's tooltips), ~25 controls got
+tooltips, ACCESS CODES REVOKE gained a confirm dialog. Full accounting of
+every finding — chosen and explicitly not — is in the session's build plan,
+referenced from DESIGN.md's Decisions Log (2026-08-16 entry).
 
 **Priority:** Medium
 **Blocked by:** nothing — needs a design pass on the cleanest UX before building (see below).
@@ -393,6 +421,34 @@ landed. Sequencing decided 2026-08-15: run this audit as its own dedicated
 pass (`/design-review` or `/office-hours`).
 
 **Depends on:** Nothing technical. Needs a UX decision (with L/D) before building.
+
+**Update 2026-08-16:** both the cue-clear gap and the full broader-scope audit
+are done — see the FIXED status line at the top of this entry.
+
+---
+
+### Octave-correction buttons only in track-list rows, never the loaded-deck header; don't reset after correcting
+
+**Priority:** Low
+**Blocked by:** Nothing technical.
+
+**What:** Found during the 2026-08-16 console-wide discoverability audit
+(already fully labeled — `aria-label`+`title` present, this is a behavior gap,
+not a documentation one, so it wasn't bundled into that pass). Two issues:
+1. The ½×/2× octave-correction buttons (`ArchitectConsole.jsx:3892-3923` area)
+   only render in track-list rows, never in the loaded-deck header
+   (`arch-deck-stats`) — correcting the BPM of whatever's currently on the
+   deck means leaving the deck view to find its row in the list below.
+2. `handleOctaveCorrect` never updates `detected_bpm_confidence` after
+   applying a correction, so the buttons don't disappear once used — a track
+   can be ½×'d then 2×'d repeatedly with no visual signal it's already fixed.
+
+**Why:** Real workflow friction, not urgent — D can still find the row and
+the correction still works, just requires navigation and offers no
+after-the-fact confirmation.
+
+**Depends on:** Nothing technical. Needs a small design decision on where the
+deck-header version of the control should live before building.
 
 ---
 
@@ -566,6 +622,17 @@ disconnect/reconnect, per the existing lesson's hypothesis), a GitHub-side
 gpg-sign helper config issue specific to this Codespace, or something else
 entirely. A genuine Codespace restart (suggested but not yet tried per the
 existing lesson) is the obvious first experiment.
+
+**Update 2026-08-16:** the "try a Codespace restart" experiment is effectively
+already done, many times over, without anyone realizing it counted. L reports
+getting disconnected and reconnecting to the Codespace "many times a day"
+since the 13th due to context/session limits — and the signing error still
+recurred today regardless. This rules out the stale-token-across-a-single-
+session theory: whatever's broken survives a fresh Codespace entirely, so it's
+something more persistent — an account-level GitHub App grant, a cached
+credential outside the Codespace's ephemeral state, or a `gh-gpgsign` config
+issue that isn't session-scoped. Next actual diagnostic step needs to look
+outside the Codespace session boundary, not inside it.
 
 **Depends on:** Nothing technical — needs someone to actually reproduce and
 diagnose it instead of bypassing on sight.

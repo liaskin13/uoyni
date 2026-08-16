@@ -1,59 +1,84 @@
 # Next Session — Resume Here
 
-**Last updated:** 2026-08-15 (PR3 full design lock: `/plan-eng-review` →
-live design collaboration → `/plan-design-review` (T10/T11/T13) →
+**Last updated:** 2026-08-16 (console-wide button/discoverability audit:
+contrast pass + full functionality pass, `/design-review` + direct build,
 context-save/learn closeout)
 
 ## Status
 
-**PR3 (T7-T14) is fully designed and reviewed — engineering AND visual —
-but NOTHING in it is implemented yet.** T7/T8 confirmed already shipped
-(multi-genre validation suite + CI). T9-T14 all have locked designs, real
-verified data behind every decision, and a clear dependency-ordered build
-sequence, but zero code has been written this session. Full record: CEO
-plan doc `~/.gstack/projects/liaskin13-psoulc/ceo-plans/2026-08-11-genre-generalized-beat-detection.md`
-(`## Implementation Tasks` + `## GSTACK REVIEW REPORT` at the end). Session
-checkpoint with the exact build order:
-`~/.gstack/projects/liaskin13-psoulc/checkpoints/20260815-080948-pr3-t9-t14-design-locked.md`.
+**PR3 (T7-T14) shipped 2026-08-15** — confidence badge, tap tempo,
+envelope explainability, validation panel, v1.4.0.0 (commit `4117150`,
+PR #12). The section below describing PR3 as "not implemented yet" is
+historical — don't act on it.
 
-Separately, unrelated to PR3: the COMMS-box keyword-help system (BEATGRID
-v1, from an older TODOS.md item) WAS implemented and tested this session —
-17/17 new tests passing, full suite 520/520. That part is genuinely done.
+**2026-08-16 session — two passes, both shipped and deployed to uoyni.com:**
 
-### Decisions worth knowing before touching PR3 again
+1. **Console contrast/legibility pass** (`/design-review`): idle-state text
+   on ~15 button classes and the entire track-list content column (title/
+   artist/status) were below WCAG AA for their font size — as low as 1.99:1.
+   Brightened to a real legibility floor, not just the bare minimum. Two
+   commits, DESIGN.md Decisions Log has the exact numbers.
+2. **Console-wide button/discoverability audit** — the initiative TODOS.md
+   had been tracking since 2026-08-11 (D's "can't clear one hot cue"
+   complaint). Full accounting of every control both agents found (chosen
+   and explicitly not) is in the session's build plan; shipped: HISTORY
+   filter bug fixed (was bound to the wrong state entirely), individual
+   hot-cue clear on all 4 banks, COMMS keyword-help made actually
+   findable (was invisible since PR3 shipped it), `?` shortcuts trigger,
+   beatgrid idle hint (biggest single gap found), Smart Crates implemented
+   for real (was a dead toggle — nothing read the value; researched
+   Serato's actual feature before building), ~25 tooltips, ACCESS CODES
+   REVOKE confirm dialog. See DESIGN.md's Hot Cues / Smart Crates / Beatgrid
+   sections and its 2026-08-16 Decisions Log entries.
+
+**Deliberately not built, both flagged rather than guessed at:**
+- Octave-correction UX (deck-header exposure + no reset-after-use signal)
+  — new TODOS.md entry, needs a small design decision first.
+- Whether D should be able to reach admin-tier rail panels (CMD MATRIX/
+  ACCESS CODES/VOID PROTOCOL/ARCHIVE LOG) — **resolved, not deferred**: L
+  confirmed directly this is intentional (D has full access if needed, the
+  admin side just isn't part of his regular workflow). ARCHIVE LOG's
+  "Architect access only" text was corrected to match reality.
+
+Separately: the Codespace GPG commit-signing bug (tracked in TODOS.md)
+recurred again this session, same as every session since 2026-08-13 —
+bypassed with `--no-gpg-sign` after explicit approval each time, same as
+before. New finding this session: L has been disconnected/reconnected to
+this Codespace many times a day since the 13th, and the bug still recurs
+regardless — rules out the "stale token, try a restart" theory that TODOS.md
+had as its leading hypothesis. Still not root-caused.
+
+### PR3 decisions (historical, superseded — PR3 shipped 2026-08-15, kept for reference)
 - **T9's badge is colored** (5-band SA palette, discrete, not a gradient) —
-  this overrides DESIGN.md's prior "confidence badge always neutral" rule,
-  by L's explicit direction. DESIGN.md's rule text and Decisions Log are
-  both already updated (2026-08-15 entries) — don't re-read the rule as if
-  it still says neutral-only.
+  overrides DESIGN.md's prior "confidence badge always neutral" rule, by L's
+  explicit direction. Live in DESIGN.md's Decisions Log — don't re-read the
+  rule as if it still says neutral-only.
 - **T9b (a companion always-on meter) was designed, then cut** — don't
-  rebuild it without a real reason. It's in TODOS.md as "revisit only if
-  the badge alone proves too slow to scan."
-- **T11's example data must be D's actual genre (hip-hop/R&B)**, never a
-  generic placeholder — got this wrong once mid-session, corrected. See
-  memory `project_design_md_is_stock_theme` and tonight's lessons.md entry.
-- **T12 ships as its own isolated PR**, not bundled with T9/T10/T11/T13 —
-  it's the only item with real regression risk (touches shared SA/WF/VU
-  rendering). Includes a bundled pre-existing bug fix (click-seek during
-  zoom transitions) that's unrelated to PR3 but rides along since it
-  touches the same file.
-- **Execution order is NOT arbitrary** — T14 must land before T9c; T12
-  should land after both (shares a file with T14); T9→T10→T11→T13 can run
-  in a fully separate parallel worktree (no file overlap with the other
-  lane). Full table in the checkpoint file above.
+  rebuild it without a real reason. TODOS.md: "revisit only if the badge
+  alone proves too slow to scan."
+- **T12 (cross-instrument pulse) has NOT shipped** — no commit found for it
+  as of 2026-08-16. Still its own isolated PR, still the only item with real
+  regression risk (touches shared SA/WF/VU rendering), still includes a
+  bundled pre-existing click-seek-during-zoom bug fix. If picked up, read the
+  CEO plan doc referenced above for the exact spec — don't re-derive it.
 
 ## Start here next session
 
-**Build PR3, in the order above.** Start with T14 (smallest, unblocks T9c) —
-extract `computeVisibleWindow` in `src/lib/beatDetector.js`, wire into
-`DeckWaveformV2.jsx`. Everything else's exact spec (files, verify steps,
-locked visual design) is in the CEO plan doc — read `## Implementation
-Tasks` in full before starting, don't re-derive from this summary.
+**No single blocking priority right now** — both of this session's passes
+(contrast + discoverability audit) are shipped and deployed. Real open items,
+ranked:
 
-After PR3 ships: the console-wide button/discoverability audit (see item 2
-below) should also verify T10/T11/T13's new COMMS-help hints actually work,
-not just design them — they were built with discoverability baked in this
-session specifically so that audit wouldn't have to start from scratch.
+1. **T12 (cross-instrument pulse)** — the one piece of PR3 still unshipped.
+2. **GOD MODE MOBILE guest-flow redesign** — L said directly "i have to do a
+   full design redo on the entire guest flow." Not scoped yet (see section
+   below for context to bring into that).
+3. **Octave-correction UX** (new TODOS.md entry, 2026-08-16) — needs a small
+   design decision (where does the deck-header version of the control live)
+   before building.
+4. **GPG signing root cause** (TODOS.md) — still unsolved, and the "try a
+   restart" lead is now ruled out (see Status above). Needs someone to look
+   outside the Codespace session boundary.
+5. Everything else: read `TODOS.md` for the full ranked list.
 
 ---
 
@@ -85,20 +110,17 @@ After that (unchanged from before, still not started):
    table (no `access_requests`-equivalent exists), request states, and a
    notification strategy (no email/SMS infra in this codebase). Full
    context: this session's design doc, Open Question 3.
-2. **Console-wide button/control review** (`/office-hours` or
-   `/design-review`) — broader audit TODOS.md has been flagging for a
-   while; the HISTORY filter bug (below) is a good concrete example to
-   bring into it.
+2. ~~Console-wide button/control review~~ — **SHIPPED 2026-08-16**, see
+   Status above. HISTORY filter bug (below) fixed as part of it.
 3. **Verify D's tablet experience** — confirmed this session D does use a
    tablet, but whether the (untouched) desktop console is actually usable
    at that width was never checked. Ask D directly.
 4. ~~Build the COMMS-box keyword-help system (BEATGRID v1)~~ — **SHIPPED
-   2026-08-15**, see Status above. Original plan (now historical):
-   `~/.claude/plans/and-read-lessons-and-concurrent-turing.md`.
+   2026-08-15**, made actually discoverable 2026-08-16. See Status above.
 5. Everything else tracked in `TODOS.md` — read that file for the full
-   ranked list, including the HISTORY filter bug (Medium, still not fixed)
-   and the Codespace GPG-signing bug (recurred a 3rd time this session,
-   bumped to Medium priority).
+   ranked list. HISTORY filter bug and the hot-cue-clear item are now
+   closed; the Codespace GPG-signing bug is still open (Medium priority,
+   the "try a restart" lead is now ruled out — see Status above).
 
 ---
 
