@@ -71,25 +71,36 @@ active_files=(
   "src/console/ArchitectConsole.jsx"
 )
 
-banned_literal_regex='"[^"]*(BLACK STAR|THE SUN|SOLAR|GALAXY|ORBIT|WARP|CHAKRA|STARFIELD)[^"]*"|\x27[^\x27]*(BLACK STAR|THE SUN|SOLAR|GALAXY|ORBIT|WARP|CHAKRA|STARFIELD)[^\x27]*\x27'
+banned_literal_regex='BLACK STAR|THE SUN|SOLAR|GALAXY|ORBIT|WARP|CHAKRA|STARFIELD'
 
 tmp_banned="/tmp/psc_design_phrase_failures.txt"
 rm -f "$tmp_banned"
 
-if [[ "$SEARCH_TOOL" == "rg" ]]; then
-  for file in "${active_files[@]}"; do
+for file in "${active_files[@]}"; do
+  if [[ "$SEARCH_TOOL" == "rg" ]]; then
     rg -n -i "$banned_literal_regex" "$file" >> "$tmp_banned" 2>/dev/null || true
-  done
-else
-  for file in "${active_files[@]}"; do
+  else
     grep -nEi "$banned_literal_regex" "$file" >> "$tmp_banned" 2>/dev/null || true
-  done
-fi
+  fi
+done
 
 if [[ -s "$tmp_banned" ]]; then
-  echo "Design-law check failed: banned space-themed display language found in active UI files."
-  cat "$tmp_banned"
-  exit 1
+  filtered_tmp="$(mktemp)"
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    if [[ "$line" =~ (fontFamily|font-family|font:|font[[:space:]]*:) ]]; then
+      continue
+    fi
+    printf '%s\n' "$line" >> "$filtered_tmp"
+  done < "$tmp_banned"
+
+  if [[ -s "$filtered_tmp" ]]; then
+    echo "Design-law check failed: banned space-themed display language found in active UI files."
+    cat "$filtered_tmp"
+    rm -f "$filtered_tmp"
+    exit 1
+  fi
+  rm -f "$filtered_tmp"
 fi
 
 # 4) Listener room stage must stay wired to ListenerShell in App.

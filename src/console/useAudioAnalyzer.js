@@ -2,7 +2,7 @@
 // Energy Map always uses pre-analyzed waveformData (full-track view requires complete data).
 
 import { useEffect, useRef } from "react";
-import { getAudioElement, getAudioContext } from "../lib/audioEngine.js";
+import { getAudioElement, getAudioContext, registerAnalyserGraph } from "../lib/audioEngine.js";
 
 const BASS_HEX    = "#1464dc";
 const MID_HEX     = "#14dc14";
@@ -189,6 +189,10 @@ export default function useAudioAnalyzer({ isPlaying, waveformData, currentTime,
       rChannelAnalyserRef.current = rAnalyser;
       lChannelDataRef.current     = new Float32Array(lAnalyser.fftSize);
       rChannelDataRef.current     = new Float32Array(rAnalyser.fftSize);
+      // So loopEngine.js's buffer source can feed these same meters instead
+      // of them going dark while a loop plays — see audioEngine.js's
+      // registerAnalyserGraph/getAnalyserGraph.
+      registerAnalyserGraph({ analyser, splitter, lAnalyser, rAnalyser });
       analyserSetupRef.current = true;
     } catch (err) {
       // AudioContext unavailable or blocked — fall back to pre-analyzed data silently

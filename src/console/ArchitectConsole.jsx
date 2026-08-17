@@ -410,16 +410,19 @@ export function enqueueWaveformGeneration(track, queueRef, runQueueFn) {
   runQueueFn();
 }
 
-// Extracted for unit testing — starts a requestAnimationFrame loop that seeks
-// engine back to loopRegion.start whenever playback crosses loopRegion.end.
-// Polls engine.getState() directly instead of engine.onStateChange (which is
-// driven by the browser's "timeupdate" event): timeupdate fires only every
-// 15-250ms per the WHATWG spec (measured ~265ms avg in Chromium), so a
-// timeupdate-driven check only notices the crossing after playback has
-// already overshot the loop point by up to that interval — audible as a
-// break at the loop boundary, and for short quantized loops (down to 1/8
-// note, ~117ms at 128 BPM) the overshoot can exceed the whole loop length.
-// rAF polls at display refresh rate (~16ms), cutting that overshoot ~94%.
+// Extracted for unit testing — starts a requestAnimationFrame loop that
+// drives engine.enforceLoop(loopRegion) at display refresh rate (~16ms)
+// while loopActiveRef.current is true. Originally (2026-08-16 quick fix)
+// this called engine.seek() directly on every crossing — replaced by a
+// thin delegation to audioEngine.js's enforceLoop() once the sample-
+// accurate buffer-loop engine shipped: enforceLoop still does that same
+// hard-seek as a fallback (before the loop-region audio has finished
+// decoding, or permanently for non-WAV tracks), but also hands playback to
+// the buffer engine once it's ready — at which point this rAF loop becomes
+// a no-op by construction (see enforceLoop's own comment for why). Keeping
+// the polling loop itself here, rather than folding it into audioEngine.js,
+// is deliberate: audioEngine.js has no React lifecycle to hook rAF
+// start/stop into.
 export function startLoopEnforcement(
   loopRegion,
   loopActiveRef,
@@ -429,10 +432,7 @@ export function startLoopEnforcement(
 ) {
   let rafId;
   const tick = () => {
-    const { currentTime: ct, isPlaying: playing } = engine.getState();
-    if (playing && loopActiveRef.current && ct >= loopRegion.end) {
-      engine.seek(loopRegion.start);
-    }
+    if (loopActiveRef.current) engine.enforceLoop(loopRegion);
     rafId = raf(tick);
   };
   rafId = raf(tick);
@@ -1113,6 +1113,13 @@ function ArchitectConsole({
       setLoadedDeckId(track.id);
       loadedDeckIdRef.current = track.id;
       setDeckHighResBars(null);
+      // A loop set on the PREVIOUS track must not survive onto this one —
+      // audioEngine.load() already tore down/discarded its own loop-engine
+      // state; this clears the React-side mirror (loop overlay prop, CLR
+      // button gate). Found this session: without it, a stale loopRegion
+      // could re-arm against a new track's unrelated timeline.
+      setLoopRegion({ start: null, end: null });
+      loopActiveRef.current = false;
       // T10/T11 — a mid-gesture tap count or a stale hover position from the
       // PREVIOUS track must not bleed into the newly loaded one (coverage
       // audit finding, 2026-08-15): the tap button would otherwise show a
@@ -1167,6 +1174,10 @@ function ArchitectConsole({
       setLoadedDeckId(track.id);
       loadedDeckIdRef.current = track.id;
       setDeckHighResBars(null);
+      // See loadAndPlay's identical comment — a loop set on the previous
+      // track must not survive onto this one.
+      setLoopRegion({ start: null, end: null });
+      loopActiveRef.current = false;
       // T10/T11 — a mid-gesture tap count or a stale hover position from the
       // PREVIOUS track must not bleed into the newly loaded one (coverage
       // audit finding, 2026-08-15): the tap button would otherwise show a
@@ -2190,6 +2201,7 @@ function ArchitectConsole({
   };
 
   const handleClearLoop = () => {
+    audioEngine.clearLoopRegion();
     setLoopRegion({ start: null, end: null });
     loopActiveRef.current = false;
     announce("Loop cleared.");
@@ -2223,8 +2235,18 @@ function ArchitectConsole({
     const start = quantizeEnabled
       ? Math.max(0, quantizeToBeat(currentTime, () => bpm, resolveDownbeatOffsetForQuantize(loadedTrack, currentTime)))
       : currentTime;
-    const end = start + beats * beatSeconds;
-    setLoopRegion({ start, end });
+    // Clamp to the track's own duration — a loop set near the tail whose
+    // end exceeds duration would let the native "ended" event fire before
+    // any boundary check gets a chance, silently abandoning the loop.
+    // Latent in the enforcement mechanism since it first shipped, closed
+    // here while already touching this function.
+    const trackDuration = audioEngine.getState().duration;
+    const end = trackDuration
+      ? Math.min(start + beats * beatSeconds, trackDuration)
+      : start + beats * beatSeconds;
+    const region = { start, end };
+    setLoopRegion(region);
+    audioEngine.setLoopRegion(region);
     loopActiveRef.current = true;
     setSelectedLoopLengthId(option.id);
     announce(`Loop ${option.label}.`);

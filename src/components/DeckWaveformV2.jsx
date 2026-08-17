@@ -13,6 +13,12 @@ import {
 } from "../lib/beatGrid";
 
 const BARS_PER_SEC = 50;
+// Above this drift (seconds) between the drag's local running position and
+// the real live playhead, resync to the live value before applying the next
+// drag delta — catches an external seek (loop enforcement forcing a hard
+// seek, or the buffer engine engaging) landing mid-drag. Below it, this is
+// just the normal small lag of the seek()->audio element roundtrip.
+const DRAG_RESYNC_EPSILON_SEC = 0.05;
 // Manual fine-tune (bars). Dynamic latency compensation is computed per-frame
 // from audioCtx.outputLatency + baseLatency + rAF frame time — this is only
 // needed if the auto value is off on specific hardware. Positive = shift forward.
@@ -579,6 +585,15 @@ export default function DeckWaveformV2({
     if (!isDraggingRef.current || !onSeek) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
+    // If something outside this drag moved the real playhead since the last
+    // frame — loop enforcement forcing a hard seek back to loopRegion.start,
+    // or the buffer engine engaging mid-drag — resync our local running
+    // total to it first. Otherwise the drag's bookkeeping goes stale and the
+    // next frame jumps by however far external code moved the playhead.
+    const liveTime = getTimeRef.current ? getTimeRef.current() : null;
+    if (liveTime != null && Math.abs(liveTime - seekedTimeRef.current) > DRAG_RESYNC_EPSILON_SEC) {
+      seekedTimeRef.current = liveTime;
+    }
     const dx            = e.clientX - lastDragXRef.current;
     lastDragXRef.current = e.clientX;
     const W             = canvas.getBoundingClientRect().width;

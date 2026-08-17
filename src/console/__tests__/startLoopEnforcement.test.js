@@ -15,14 +15,22 @@ import { startLoopEnforcement } from "../ArchitectConsole";
 // Fake engine: currentTime advances in real (ms) time regardless of whether
 // anything "notified" — mirrors the real HTMLAudioElement, where .currentTime
 // is always live but the "timeupdate" event that used to drive this check
-// only fires every 15-250ms (WHATWG spec).
+// only fires every 15-250ms (WHATWG spec). enforceLoop() here reproduces
+// just the hard-seek fallback path of audioEngine.js's real enforceLoop —
+// enough to prove startLoopEnforcement still drives it every rAF frame;
+// the buffer-mode-engage half of the real enforceLoop is covered directly
+// in src/lib/__tests__/audioEngine.test.js, not duplicated here.
 function makeFakeEngine({ startAt = 0 } = {}) {
   let t = startAt;
   let playing = true;
   const seekCalls = [];
   return {
-    getState: () => ({ currentTime: t, isPlaying: playing }),
-    seek: (to) => { seekCalls.push({ at: t, to }); t = to; },
+    enforceLoop: (loopRegion) => {
+      if (playing && t >= loopRegion.end) {
+        seekCalls.push({ at: t, to: loopRegion.start });
+        t = loopRegion.start;
+      }
+    },
     advance: (ms) => { t += ms / 1000; },
     setPlaying: (v) => { playing = v; },
     seekCalls,

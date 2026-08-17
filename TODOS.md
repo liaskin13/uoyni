@@ -5,60 +5,66 @@ and enough context to pick it up cold.
 
 ---
 
-### Full sample-accurate gapless loop engine (Web Audio buffer loop + crossfade)
+### ~~Full sample-accurate gapless loop engine~~ — BUILT 2026-08-16, pending D's listening pass
 
-**Priority:** Medium-high — "meet or exceed pro DJ software" bar item; D
-(audio engineering background) will hear the residual click even after the
-quick fix below.
+**What shipped:** the real fix for D's "a tiny break... not continuous"
+loop complaint (root cause + quick rAF-polling mitigation logged in the
+Completed section below). `src/lib/loopEngine.js` (new) decodes only the
+loop-region slice — never the whole track — via a new `fetchWavHeader`/
+`fetchWavPcmRange` pair in `waveformAnalyzer.js` (shares the existing,
+already-correct RIFF header-walk, extracted as `parseWavHeader` rather than
+duplicated), snaps the loop's start/end to a *matched pair* of
+zero-crossings (`findMatchedZeroCrossings` — matching the pair, not each
+edge independently, is what prevents per-cycle length drift from
+compounding across hundreds of native loop repeats), and plays it back via
+a native, sample-accurate `AudioBufferSourceNode` with `.loop = true` —
+zero JS involvement per repeat cycle, which is what makes it genuinely
+gapless rather than just a faster JS-driven seek. `audioEngine.js` is now
+mode-aware: `getState/seek/play/pause/setVolume` transparently route to
+whichever engine (the `<audio>` element or the loop buffer) owns playback
+at any given moment, so none of the ~15 existing call sites across the
+console needed to change. WAV-only (matches every existing precedent in
+this codebase); non-WAV tracks permanently fall back to the already-shipped
+rAF hard-seek mechanism.
 
-**Blocked by:** Nothing technical. Deliberately scoped out of the 2026-08-16
-quick fix as its own reviewed piece of work (5-file architecture change).
+**Verified this session:** 51 new unit tests (WAV header parsing +
+byte-range decode, zero-crossing pairing, pause/resume offset math,
+`resolvePlaybackMode`, `enforceLoop`'s mode routing) — all passing, 626/626
+total, build clean. Also verified against a **real** `AudioContext` and a
+real WAV file served with genuine HTTP Range support (Vite dev server): the
+buffer engine engaged correctly, `currentTime` stayed wrapped inside the
+loop region across multiple real native loop cycles with zero JS
+re-correction, pause/resume and seek-in/seek-out of the region all behaved
+correctly.
 
-**What:** D reported the console's LOOP feature has "a tiny break... not
-continuous as a loop must be." Root cause (confirmed via WHATWG spec +
-live measurement in this project's Chromium build, see
-`src/console/__tests__/startLoopEnforcement.test.js` and the
-`startLoopEnforcement` function it tests in `ArchitectConsole.jsx`): the
-loop-boundary detection used to rely on the browser's `timeupdate` event,
-which fires only every 15-250ms (measured ~265ms avg here) — by the time the
-crossing was noticed, playback had already overshot the loop-out point, and
-`audioEngine.seek()` (a plain `audio.currentTime =` write on a native
-`<audio>` element) isn't sample-accurate either. **Fixed same-day:** swapped
-the polling mechanism from `timeupdate` to `requestAnimationFrame`
-(`~16ms` resolution, ~94% less overshoot) — see the "Completed" section.
-**Not fixed, and out of scope for that quick fix:** even with perfect
-timing, a hard cut at a beat-quantized loop point is not guaranteed to land
-on a zero-crossing of the waveform, so a residual click from the sample
-*amplitude discontinuity itself* is still possible — this is a separate DSP
-problem from timing, confirmed via literature on click-artifact splicing
-(zero-crossing loop points / equal-power crossfade at the boundary).
+**Verified live in the real console (L's owner code, same session):**
+loaded EIGHTYSIXTY — a real ~79-minute production WAV mix, not a test
+fixture — applied a 1-BAR loop through the actual loop-size panel UI.
+`loopEngine.isActive()` confirmed `true`; sampled the real FFT analyser 9
+times over ~1.2s and got non-zero, varying energy the whole time (meters
+are genuinely fed during a loop, not dark); tracked `currentTime` over ~4s
+and watched it cycle a bounded ~52.4–55.2s range twice (native looping,
+confirmed on production audio); PAUSE froze the reported time cleanly,
+PLAY resumed from it; CLR handed back to the `<audio>` element with
+playback continuing seamlessly past the old loop boundary (checked
+`currentTime` still climbing 7s later). Zero console errors across the
+whole pass. Drag-scrub-through-a-loop-boundary wasn't separately exercised
+(hard to simulate precisely via automation on a canvas waveform) but
+everything upstream of it now checks out on real production data.
 
-**Real fix:** decode only the loop-region audio slice (reusing the existing
-chunked Range-request pattern already in `analyzeAudioChunkedWav`,
-`src/lib/waveformAnalyzer.js`, so memory stays bounded even on D's 800MB+
-WAV mixes — do NOT decode the whole track) into a short
-`AudioBufferSourceNode` and use its native, sample-accurate
-`.loop`/`.loopStart`/`.loopEnd` for the repeat, with a short equal-power
-crossfade at the splice point to kill any residual click from a
-non-zero-crossing loop point. This is the actual Serato/Rekordbox-grade
-answer (their docs/MDN confirm `AudioBufferSourceNode.loopStart/loopEnd` is
-the standard gapless mechanism; HTML5 `<audio>` looping is explicitly not).
+**The real acceptance test — does it actually sound gapless — still needs D
+to listen post-deploy** (this can never be automated). If he still hears a
+click, that most likely means a loop point had no true zero-crossing in the
+±10ms search window (the code degrades to closest-to-zero in that case, not
+a crash) — `loopEngine.js` now logs this exact case via `console.warn`
+(region + snapped indices) when `localStorage.psc_debug_loop_edges` is set
+to `'1'`, so a real report has a concrete loop point to point at instead of
+a guess. Flip it on in the browser console before a suspected-click session.
 
-**Context:** `src/console/useAudioAnalyzer.js` already routes the shared
-`<audio>` element through a Web Audio graph for the live FFT/meter tap
-(`source.connect(audioCtx.destination)` — see `audioctx-gesture-scope` and
-`live-fft-singleton-guard` in project memory) — so Web Audio API is already
-in the live signal path, just not driving playback itself yet. Any buffer-loop
-engine needs to keep feeding that same analyser chain while a loop plays
-(brief silence on the meters during a loop would itself be a regression), and
-needs to hand control back to the `<audio>` element cleanly when the loop is
-cleared. No existing test coverage for audio-graph wiring to lean on — plan
-for that as part of this work, not an afterthought.
-
-**Depends on:** Nothing blocking. Scoped out only for review/blast-radius
-reasons (touches `audioEngine.js`, a new loop-engine helper,
-`ArchitectConsole.jsx`, `useAudioAnalyzer.js`, and tests — 5 files, vs. the
-1-file quick fix already shipped).
+**If D still hears a click after this:** the next step is a pre-rendered
+equal-power crossfade baked into the buffer at decode time (not a live
+per-cycle JS-scheduled crossfade — unnecessary complexity given native
+`.loop` already handles repeats). Don't build it speculatively.
 
 ---
 

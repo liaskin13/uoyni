@@ -42,13 +42,14 @@ const CHUNK_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB per Range request
  * IIR filter state is carried across chunk boundaries so results are identical
  * to a single-pass decode.
  */
-async function analyzeAudioChunkedWav(audioUrl, barsPerSec = 50, onProgress) {
-  // Fetch first 4096 bytes to parse the WAV header (covers DAW LIST/INFO chunks)
-  const headerRes = await fetch(audioUrl, { headers: { Range: 'bytes=0-4095' } });
-  if (!headerRes.ok) throw new Error(`WAV header fetch failed: ${headerRes.status}`);
-  const headerBuf = await headerRes.arrayBuffer();
-  const headerU8  = new Uint8Array(headerBuf);
-  const headerDV  = new DataView(headerBuf);
+// Parses a WAV RIFF header out of an already-fetched ArrayBuffer (normally
+// just the first ~4096 bytes — enough to cover DAW LIST/INFO chunks before
+// `data`). Pure — no I/O. Extracted so the loop-region playback engine
+// (src/lib/loopEngine.js) can share the exact same, already-correct chunk
+// walk instead of a second copy that could drift from this one.
+export function parseWavHeader(headerArrayBuffer) {
+  const headerU8 = new Uint8Array(headerArrayBuffer);
+  const headerDV = new DataView(headerArrayBuffer);
 
   const txt = (off, len) =>
     Array.from({ length: len }, (_, i) => String.fromCharCode(headerU8[off + i])).join('');
@@ -58,7 +59,7 @@ async function analyzeAudioChunkedWav(audioUrl, barsPerSec = 50, onProgress) {
 
   let sampleRate, numChannels, bitsPerSample, dataOffset, dataSize;
   let pos = 12;
-  while (pos + 8 <= headerBuf.byteLength) {
+  while (pos + 8 <= headerArrayBuffer.byteLength) {
     const id = txt(pos, 4);
     const sz = headerDV.getUint32(pos + 4, true);
     if (id === 'fmt ') {
@@ -81,9 +82,79 @@ async function analyzeAudioChunkedWav(audioUrl, barsPerSec = 50, onProgress) {
     throw new Error(`WAV ${bitsPerSample}-bit not supported — expected 16 or 24`);
   }
 
-  const bytesPerSample  = bitsPerSample / 8;
-  const frameSize       = numChannels * bytesPerSample;
+  const bytesPerSample = bitsPerSample / 8;
+  const frameSize      = numChannels * bytesPerSample;
   if (frameSize < 1) throw new Error('invalid WAV: zero frame size (corrupt header)');
+  const totalSamples = Math.floor(dataSize / frameSize);
+  const duration      = totalSamples / sampleRate;
+
+  return {
+    sampleRate, numChannels, bitsPerSample, bytesPerSample, frameSize,
+    dataOffset, dataSize, totalSamples, duration,
+  };
+}
+
+// Range-fetches just the WAV header bytes and parses them. Unlike
+// analyzeAudioChunkedWav's own header fetch (which only checks `.ok`, kept
+// as-is below to avoid any behavior change to the already-shipped,
+// OOM-critical waveform-analysis path), this checks for a real 206 Partial
+// Content response. A server that silently ignores the Range header and
+// returns the full file would otherwise be mis-decoded as if it were just
+// the header slice — for a waveform visualization that's a cosmetic risk;
+// for loop-region PLAYBACK it would decode the wrong bytes entirely, so the
+// stricter check belongs here. Confirmed worker/upload-worker.js's
+// GET /audio/:key already returns real 206 responses for Range requests —
+// no worker change needed for this to work in production.
+export async function fetchWavHeader(url) {
+  const headerRes = await fetch(url, { headers: { Range: 'bytes=0-4095' } });
+  if (headerRes.status !== 206) {
+    throw new Error(`WAV header fetch: expected 206, got ${headerRes.status}`);
+  }
+  const headerBuf = await headerRes.arrayBuffer();
+  return parseWavHeader(headerBuf);
+}
+
+// Range-fetches a byte span of WAV PCM data and decodes it into one
+// Float32Array per channel (NOT downmixed to mono, NOT band-split — that's
+// analyzeAudioChunkedWav's visualization-specific job below). Used by the
+// loop-region playback engine to pull just the small slice it needs to
+// build a native, sample-accurate loop buffer, never the whole file.
+export async function fetchWavPcmRange(url, header, startByte, endByte) {
+  const res = await fetch(url, { headers: { Range: `bytes=${startByte}-${endByte}` } });
+  if (res.status !== 206) {
+    throw new Error(`WAV PCM range fetch: expected 206, got ${res.status}`);
+  }
+  const u8 = new Uint8Array(await res.arrayBuffer());
+  const { numChannels, bitsPerSample, bytesPerSample, frameSize } = header;
+  const frameCount = Math.floor(u8.length / frameSize);
+  const channels = Array.from({ length: numChannels }, () => new Float32Array(frameCount));
+  for (let s = 0; s < frameCount; s++) {
+    for (let ch = 0; ch < numChannels; ch++) {
+      const o = s * frameSize + ch * bytesPerSample;
+      if (bitsPerSample === 16) {
+        let v = (u8[o + 1] << 8) | u8[o];
+        if (v >= 0x8000) v -= 0x10000;
+        channels[ch][s] = v / 32768.0;
+      } else { // 24-bit signed LE
+        let raw = u8[o] | (u8[o + 1] << 8) | (u8[o + 2] << 16);
+        if (raw >= 0x800000) raw -= 0x1000000;
+        channels[ch][s] = raw / 8388608.0;
+      }
+    }
+  }
+  return { channels, frameCount };
+}
+
+async function analyzeAudioChunkedWav(audioUrl, barsPerSec = 50, onProgress) {
+  // Fetch first 4096 bytes to parse the WAV header (covers DAW LIST/INFO chunks)
+  const headerRes = await fetch(audioUrl, { headers: { Range: 'bytes=0-4095' } });
+  if (!headerRes.ok) throw new Error(`WAV header fetch failed: ${headerRes.status}`);
+  const headerBuf = await headerRes.arrayBuffer();
+  const {
+    sampleRate, numChannels, bitsPerSample, bytesPerSample, frameSize,
+    dataOffset, dataSize,
+  } = parseWavHeader(headerBuf);
+
   const alignedChunkSize = Math.floor(CHUNK_SIZE_BYTES / frameSize) * frameSize;
 
   const totalSamples = Math.floor(dataSize / frameSize);
