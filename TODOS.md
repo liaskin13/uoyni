@@ -5,6 +5,18 @@ and enough context to pick it up cold.
 
 ---
 
+## Completed 2026-08-17 — gapless loop engine ship + live preview
+
+- Branch: `feat/gapless-loop-engine` pushed to `origin/feat/gapless-loop-engine`
+- Verification: `npm run preflight` passed
+- Deploy: `npx wrangler pages deploy dist --project-name psoulc` succeeded
+- Preview: [feat-gapless-loop-engine preview](https://feat-gapless-loop-engine.psoulc.pages.dev)
+- Commit: `0a7971f` — `feat: gapless loop engine and validation guardrails`
+- Notes: the Codespace GPG signing failure was environment-specific; the workaround was `git commit --no-gpg-sign` and is not a code defect
+- Follow-up: do not reopen this as an unverified branch; treat it as shipped and ready for D's listening pass
+
+---
+
 ### ~~Full sample-accurate gapless loop engine~~ — BUILT 2026-08-16, pending D's listening pass
 
 **What shipped:** the real fix for D's "a tiny break... not continuous"
@@ -362,6 +374,7 @@ may differ.
 **Blocked by:** nothing, but the second half touches `worker/upload-worker.js` — treat with extra care, prior worker changes have caused regressions (see `~/.gstack/projects/*/  *-main-design-20260527-*.md` constraints).
 
 **What:** Two small, pre-existing gaps noticed during the INTAKE batch-upload eng review (2026-07-21):
+
 1. If the destination vault `<select>` is changed while items are still queued/uploading, later items in the same batch go to the new vault — a single drop can silently split across two vaults. Already true today via console tab-switching; the INTAKE modal's dedicated dropdown just makes it more discoverable/likely to trigger.
 2. If the browser closes or reloads mid-upload, the R2 multipart upload session (`worker/upload-worker.js` `/upload-init`/`/upload-part`/`/upload-complete`) is abandoned with no `abortMultipartUpload` call — an orphaned-storage leak in R2 over time.
 
@@ -498,6 +511,7 @@ are done — see the FIXED status line at the top of this entry.
 **What:** Found during the 2026-08-16 console-wide discoverability audit
 (already fully labeled — `aria-label`+`title` present, this is a behavior gap,
 not a documentation one, so it wasn't bundled into that pass). Two issues:
+
 1. The ½×/2× octave-correction buttons (`ArchitectConsole.jsx:3892-3923` area)
    only render in track-list rows, never in the loaded-deck header
    (`arch-deck-stats`) — correcting the BPM of whatever's currently on the

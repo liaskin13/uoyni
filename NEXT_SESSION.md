@@ -6,6 +6,12 @@ context-save/learn closeout)
 
 ## Status
 
+**2026-08-17 final ship note:** the `feat/gapless-loop-engine` branch was
+verified and deployed as a Pages preview. The live verification path was:
+`npm run preflight` → passed, then `npx wrangler pages deploy dist --project-name psoulc` → success.
+Preview: [feat-gapless-loop-engine preview](https://feat-gapless-loop-engine.psoulc.pages.dev)
+Commit: `0a7971f` — `feat: gapless loop engine and validation guardrails`
+
 **PR3 (T7-T14) shipped 2026-08-15** — confidence badge, tap tempo,
 envelope explainability, validation panel, v1.4.0.0 (commit `4117150`,
 PR #12). The section below describing PR3 as "not implemented yet" is
@@ -32,6 +38,7 @@ historical — don't act on it.
    sections and its 2026-08-16 Decisions Log entries.
 
 **Deliberately not built, both flagged rather than guessed at:**
+
 - Octave-correction UX (deck-header exposure + no reset-after-use signal)
   — new TODOS.md entry, needs a small design decision first.
 - Whether D should be able to reach admin-tier rail panels (CMD MATRIX/
@@ -49,6 +56,7 @@ regardless — rules out the "stale token, try a restart" theory that TODOS.md
 had as its leading hypothesis. Still not root-caused.
 
 ### PR3 decisions (historical, superseded — PR3 shipped 2026-08-15, kept for reference)
+
 - **T9's badge is colored** (5-band SA palette, discrete, not a gradient) —
   overrides DESIGN.md's prior "confidence badge always neutral" rule, by L's
   explicit direction. Live in DESIGN.md's Decisions Log — don't re-read the
@@ -87,6 +95,7 @@ ranked:
 **L said directly: "i have to do a full design redo on the entire guest
 flow."** Not scoped yet — this is the natural next `/office-hours` or
 `/design-consultation` topic. Context to bring into it:
+
 - The contrast brightening done this session (`--text-secondary` ~4.5:1 →
   ~7.15:1, `--text-muted` → ~5.9:1, platform-wide via `variables.css`) was
   explicitly scoped as a stopgap — L said the muted-token bump was visually
@@ -104,6 +113,7 @@ flow."** Not scoped yet — this is the natural next `/office-hours` or
   constraint for the redesign, not just aesthetic preference.
 
 After that (unchanged from before, still not started):
+
 1. **Capability 2 — request-review queue**: a stranger submits REQUEST
    ACCESS on the entry screen → lands in L's console for review/approval.
    Explicitly deferred this session as a separate build — needs a new D1
@@ -127,22 +137,26 @@ After that (unchanged from before, still not started):
 ## Key technical notes (still current)
 
 ### Deploy sequence (every session — see CLAUDE.md for full detail)
+
 ```
 git add <files> && git commit -m "..."
 git push
 cd worker && npx wrangler deploy   # only if worker/ changed; needs CLOUDFLARE_API_TOKEN exported
 npm run build && npx wrangler pages deploy dist --project-name psoulc   # only if frontend changed
 ```
+
 Cloudflare Pages is direct-upload only — pushing to `main` does NOT deploy
 the frontend by itself.
 
 ### D1 migrations
+
 Must be applied manually via the Cloudflare dashboard D1 console **before**
 deploying worker code that references new columns — the configured API
 token has zero D1 access via `wrangler`, not even read-only PRAGMA/SELECT.
 Confirmed empirically 2026-08-13.
 
 ### Verify before claiming something is/isn't shipped
+
 Git-status snapshots injected at conversation start (and prior-session
 summaries, especially after a context compaction) can go stale mid-session.
 Before asserting anything about ship/deploy state, re-check live: `git log`,
@@ -151,6 +165,7 @@ Before asserting anything about ship/deploy state, re-check live: `git log`,
 briefly made fully-shipped, deployed work look uncommitted.
 
 ### DESIGN.md
+
 Still the sole canonical design doc — read it before touching any CSS/JSX.
 It currently has zero coverage of the COMMS/REACH LCD family
 (`src/console/ContextStrip.jsx`/`.css`) — the COMMS-help build above should
@@ -174,6 +189,7 @@ check there once it's done rather than trusting old notes like these.
 **Last updated:** 2026-05-20 (session 3)
 
 ## Status
+
 Guest flow adapt + animate COMPLETE. Critique score **35/40** (25→27→31→35). All shipped to uoyni.com. Zero P0/P1/P2 issues — two P3s remaining.
 
 ---
@@ -181,11 +197,13 @@ Guest flow adapt + animate COMPLETE. Critique score **35/40** (25→27→31→35
 ## DONE this session (session 2 — bolder/harden)
 
 ### v3 guest flow — full implementation (commit 3d0aebe)
+
 - `src/listener/ListenerVaultView.jsx` + `src/listener/ListenerVaultView.css` (new files)
 - `src/listener/ListenerShell.jsx`: duration hero, vaultStats, openVault on stage click
 - `src/index.css`: breathing hint, duration hero classes, safe area fix
 
 ### 8 iPhone 13 bugs fixed (commit 5e867ec)
+
 1. Waveform visibility: unplayed bars 0.28 → 0.55 opacity
 2. Dock tab: tapping active tab now enters vault via openVault()
 3. Persistent playback: back keeps music playing; mini-transport strip in track list
@@ -196,6 +214,7 @@ Guest flow adapt + animate COMPLETE. Critique score **35/40** (25→27→31→35
 8. Text sizes: subtitle/meta 8px → 10px, meta contrast raised
 
 ### Waveform rAF fix + header layout (commit 77e7ad2)
+
 - `WaveformCanvas`: stable rAF draw loop, refs for currentTime/duration, `getBoundingClientRect()`
 - `lvv-header`: `height: 44px` → `calc(44px + env(safe-area-inset-top, 0px))`
 
@@ -238,25 +257,30 @@ Critique: 25 → 27 → 31 → 33/40. Zero P0/P1. Slug: `guest-flow-listenershel
 ## Key technical notes (session 3, historical)
 
 ### Canvas rendering (HARD-WON this session)
+
 - `canvas.offsetWidth` returns 0 on Chrome/iOS before layout settles → use `getBoundingClientRect()` as primary
 - `currentTime` in draw `useCallback` deps → ResizeObserver thrashes at 250ms → nothing draws
 - Pattern: `currentTimeRef` + `durationRef` updated via `useEffect`, rAF loop for continuous redraw
 - See `src/listener/ListenerVaultView.jsx` WaveformCanvas (lines ~68-160)
 
 ### Safe area header pattern
+
 - Fixed-height headers with safe-area padding must use: `height: calc(44px + env(safe-area-inset-top, 0px))`
 - NOT `height: 44px` — that causes content to be hidden behind the notch
 
 ### Dev server
+
 Use `npm run preview` not `npm run dev` (react version mismatch causes dev server issues) — note: a later session (PR #9, 2026-08-12) fixed the underlying react/react-dom version mismatch; re-check whether `npm run dev` works fine now before assuming this workaround is still needed.
 
 ### Waveform colors (confirmed by L — no green bars)
+
 - Played bars: `#14dc14` (identity green)
 - Unplayed bars: `rgba(240,237,232,0.55)` — off-white only
 - Ghost (paused state): `rgba(240,237,232,0.11)` — intentionally subtle
 - Thumbnails (track list): `rgba(240,237,232,0.55)` — same off-white
 
 ### File boundaries
+
 - `src/listener/ListenerVaultView.jsx` — all player/waveform changes
 - `src/listener/ListenerShell.jsx` — vault shell, dock, duration hero
 - `src/listener/ListenerVaultView.css` — vault player styles
