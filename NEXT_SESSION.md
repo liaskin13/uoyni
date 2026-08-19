@@ -1,25 +1,32 @@
 # Next Session — Resume Here
 
-**Last updated:** 2026-08-16 (console-wide button/discoverability audit:
-contrast pass + full functionality pass, `/design-review` + direct build,
+**Last updated:** 2026-08-19 (gapless loop engine shipped to production,
+guest-session persistence reviewed + a live production regression fixed,
 context-save/learn closeout)
 
 ## Status
 
-**2026-08-18 checkpoint note:** saved the current repo state to the gstack
-checkpoint path and confirmed there is no dedicated stale-agent registry in
-this repo. The active stale-work sources are the live notes in [NEXT_SESSION.md](NEXT_SESSION.md)
-and [TODOS.md](TODOS.md), not a separate agent index.
+**2026-08-19 — two pieces of work, both live in production:**
 
-Current stale/unfinished items to carry forward: T12 cross-instrument pulse,
-GOD MODE MOBILE guest-flow redesign, octave-correction UX, the unresolved
-Codespace GPG-signing root cause, and the request-review queue work.
-
-**2026-08-17 final ship note:** the `feat/gapless-loop-engine` branch was
-verified and deployed as a Pages preview. The live verification path was:
-`npm run preflight` → passed, then `npx wrangler pages deploy dist --project-name psoulc` → success.
-Preview: [feat-gapless-loop-engine preview](https://feat-gapless-loop-engine.psoulc.pages.dev)
-Commit: `0a7971f` — `feat: gapless loop engine and validation guardrails`
+1. **Gapless loop engine** (commits `0a7971f` + `2cb40cd`) — merged to
+   `main`, deployed to **production** (not just a preview — confirmed via
+   `wrangler pages deployment list` showing a Production deployment built
+   from `2cb40cd`, plus a live `curl uoyni.com` 200). Full detail in
+   `TODOS.md`'s "Full sample-accurate gapless loop engine" entry.
+   **Still needs D's actual listening pass** — the real acceptance test,
+   can't be automated, hasn't happened yet.
+2. **Guest session persistence + revalidation** (commit `ac2b4a2`) — built
+   by GitHub Copilot while this session was interrupted (hit an API session
+   limit mid-`/ship`) and L was manually finishing the loop-engine deploy
+   ("had to use copilot... it really sucked"). Reviewed on resume: caught
+   and fixed a **live production regression** — the `0000` public
+   guest-access code (shown to every real guest by
+   `RequestAccessModal.jsx`) had been accidentally gated behind a
+   nonexistent env var, so new guests were hitting "Code not found" in
+   production. Fixed and deployed immediately, confirmed live. Full
+   writeup + the lesson for next time in `TODOS.md`'s "Guest session
+   persistence + revalidation" Completed entry — **read it** before
+   touching `/redeem` or anything checking `code === "0000"` again.
 
 **PR3 (T7-T14) shipped 2026-08-15** — confidence badge, tap tempo,
 envelope explainability, validation panel, v1.4.0.0 (commit `4117150`,
@@ -59,10 +66,18 @@ historical — don't act on it.
 Separately: the Codespace GPG commit-signing bug (tracked in TODOS.md)
 recurred again this session, same as every session since 2026-08-13 —
 bypassed with `--no-gpg-sign` after explicit approval each time, same as
-before. New finding this session: L has been disconnected/reconnected to
-this Codespace many times a day since the 13th, and the bug still recurs
-regardless — rules out the "stale token, try a restart" theory that TODOS.md
-had as its leading hypothesis. Still not root-caused.
+before. **2026-08-19 — L finally has a real, testable lead: "its cuz i
+changed the name to uoyni from psoulc on git and added my name too."** The
+repo was renamed on GitHub (`psoulc` → `uoyni` — confirmed real mismatch:
+`git remote get-url origin` → `.../uoyni.git`, but the local directory is
+still `/workspaces/psoulc`) around the same time the commit author name
+changed. Either could have desynced the GitHub App-issued signing identity
+`gh-gpgsign` expects. This is now the #1 priority for next session — see
+TODOS.md's "Investigate root cause of recurring Codespace commit-signing
+failures" entry for the exact next steps (`gh api user`, `gh auth status`,
+checking whether the signing app's grant survived the rename). Do not
+re-diagnose from scratch or write anywhere that this is resolved/
+environment-specific until that lead has actually been tested.
 
 ### PR3 decisions (historical, superseded — PR3 shipped 2026-08-15, kept for reference)
 
@@ -81,21 +96,21 @@ had as its leading hypothesis. Still not root-caused.
 
 ## Start here next session
 
-**No single blocking priority right now** — both of this session's passes
-(contrast + discoverability audit) are shipped and deployed. Real open items,
-ranked:
-
-1. **T12 (cross-instrument pulse)** — the one piece of PR3 still unshipped.
-2. **GOD MODE MOBILE guest-flow redesign** — L said directly "i have to do a
+1. **GPG signing root cause** (TODOS.md) — L has a real, specific lead now
+   (the `psoulc`→`uoyni` repo rename + author name change, see Status
+   above). Start here — concrete next steps are already written out in
+   TODOS.md's entry, don't re-diagnose from scratch.
+2. **D's listening pass on the gapless loop engine** — the real acceptance
+   test for this session's headline fix, still hasn't happened. Not
+   something to build, just something to chase down/confirm.
+3. **T12 (cross-instrument pulse)** — the one piece of PR3 still unshipped.
+4. **GOD MODE MOBILE guest-flow redesign** — L said directly "i have to do a
    full design redo on the entire guest flow." Not scoped yet (see section
    below for context to bring into that).
-3. **Octave-correction UX** (new TODOS.md entry, 2026-08-16) — needs a small
+5. **Octave-correction UX** (new TODOS.md entry, 2026-08-16) — needs a small
    design decision (where does the deck-header version of the control live)
    before building.
-4. **GPG signing root cause** (TODOS.md) — still unsolved, and the "try a
-   restart" lead is now ruled out (see Status above). Needs someone to look
-   outside the Codespace session boundary.
-5. Everything else: read `TODOS.md` for the full ranked list.
+6. Everything else: read `TODOS.md` for the full ranked list.
 
 ---
 

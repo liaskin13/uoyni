@@ -5,18 +5,6 @@ and enough context to pick it up cold.
 
 ---
 
-## Completed 2026-08-17 — gapless loop engine ship + live preview
-
-- Branch: `feat/gapless-loop-engine` pushed to `origin/feat/gapless-loop-engine`
-- Verification: `npm run preflight` passed
-- Deploy: `npx wrangler pages deploy dist --project-name psoulc` succeeded
-- Preview: [feat-gapless-loop-engine preview](https://feat-gapless-loop-engine.psoulc.pages.dev)
-- Commit: `0a7971f` — `feat: gapless loop engine and validation guardrails`
-- Notes: the Codespace GPG signing failure was environment-specific; the workaround was `git commit --no-gpg-sign` and is not a code defect
-- Follow-up: do not reopen this as an unverified branch; treat it as shipped and ready for D's listening pass
-
----
-
 ### ~~Full sample-accurate gapless loop engine~~ — BUILT 2026-08-16, pending D's listening pass
 
 **What shipped:** the real fix for D's "a tiny break... not continuous"
@@ -77,6 +65,16 @@ a guess. Flip it on in the browser console before a suspected-click session.
 equal-power crossfade baked into the buffer at decode time (not a live
 per-cycle JS-scheduled crossfade — unnecessary complexity given native
 `.loop` already handles repeats). Don't build it speculatively.
+
+**Final ship state (2026-08-18):** merged to `main` and deployed to
+**production** (not just a preview) — commit `0a7971f`, docs follow-up
+`2cb40cd`. Confirmed via `wrangler pages deployment list --project-name
+psoulc` showing a Production deployment built from `2cb40cd`, plus a live
+`curl uoyni.com` 200 and worker `/health` check. Session interrupted mid-way
+through `/ship`'s own review steps (API session limit); the commit/merge/
+deploy that got this to production was finished by hand outside the normal
+`/ship` flow while the session was down — see the GPG-signing entry
+elsewhere in this file for why that was harder than it should've been.
 
 ---
 
@@ -711,6 +709,26 @@ credential outside the Codespace's ephemeral state, or a `gh-gpgsign` config
 issue that isn't session-scoped. Next actual diagnostic step needs to look
 outside the Codespace session boundary, not inside it.
 
+**Priority bump 2026-08-19 — L has a specific, testable lead, start here
+next session:** L's own theory: "its cuz i changed the name to uoyni from
+psoulc on git and added my name too" — i.e. the GitHub repo was renamed
+(`psoulc` → `uoyni`, matching `git remote get-url origin` →
+`github.com/liaskin13/uoyni.git`, which doesn't match the local directory
+name `/workspaces/psoulc` — a real, verifiable mismatch) around the same
+time the commit author name changed. Both are exactly the kind of thing that
+could desync a GitHub App-issued signing identity/token from what `gh-gpgsign`
+expects, matching the "account-level GitHub App grant" hypothesis above.
+**Concrete next steps, in order:** (1) `gh api user` and `git log -1
+--format='%an <%ae>'` — confirm the actual current author identity vs. what
+GitHub's signing service thinks it should be; (2) `gh auth status` and check
+whether the GitHub App used for commit signing was authorized under the OLD
+repo name and never re-granted after the rename — repo renames can silently
+break app-level permissions scoped to the old name/URL; (3) if so, the fix is
+likely re-authorizing/re-installing the signing app against the renamed repo,
+not a Codespace-side change at all. This is NOT resolved — do not write
+anywhere that it's "environment-specific and not a code defect" without
+actually testing this lead first.
+
 **Depends on:** Nothing technical — needs someone to actually reproduce and
 diagnose it instead of bypassing on sight.
 
@@ -787,3 +805,45 @@ sample-accurate gapless loop engine"), deliberately scoped out as a 5-file
 architecture change rather than riding in on this fix.
 
 **Completed:** 2026-08-16 (575/575 tests passing, build clean)
+
+---
+
+### Guest session persistence + revalidation, and a live production incident it caused
+
+**What:** built by GitHub Copilot while this session was down (API limit) and
+the user was manually finishing the loop-engine deploy — L: "unfortunately, i
+had to use copilot." Guest sessions now persist the redemption `code` (not
+just `savedAt`), and `ListenerShell` background-revalidates a persisted
+session's code against the worker on load, so a revoked/expired code actually
+signs the guest out instead of a stale localStorage session staying valid
+forever unchecked. `/redeem` also now rejects a missing/empty `fingerprint`
+before the device-binding check, closing a scripted-bypass gap.
+
+**The incident:** Copilot's change gated the `0000` public listener code
+behind `env.ALLOW_TEST_BYPASS === "true"` — a var that doesn't exist in
+production — based on a stale in-code comment calling it a "TEST BYPASS,
+remove before public launch." That comment was wrong for the *current*
+product: `src/entry/RequestAccessModal.jsx` shows `0000` to every real guest
+who requests listening access ("YOUR CODE: 0000 ... unlocks all listening
+frequencies. No review required."). It is not a test-only backdoor. Once
+deployed, every new guest hit `{"error":"Code not found"}` — confirmed live
+via a direct `curl` to the production worker during this session's review.
+
+**Fix:** removed the `ALLOW_TEST_BYPASS` gate (0000 unconditional again,
+matching the real product design), rewrote the misleading comment to say
+plainly why it must stay that way, deployed the corrected worker immediately
+given real users were affected, then confirmed live. Also relaxed
+`readPersistedSession()` so a session saved before the `code` field existed
+isn't silently signed out — it just skips the new revalidation, same
+behavior as before this feature shipped. New regression tests for both: 3 on
+the worker's `0000` describe block (`worker/test/redeem.test.js`), 1 for the
+legacy-session case (`ListenerShellCodeGate.test.js`).
+
+**Lesson for next time an AI agent (any of them) touches `/redeem` or
+anything reading `code === "0000"`:** that literal is a real, permanent,
+user-facing product feature, not leftover test scaffolding — verify against
+`RequestAccessModal.jsx`'s actual UI copy before "cleaning it up."
+
+**Completed:** 2026-08-19 (651 frontend + 16 worker tests passing, build
+clean, deployed to production and verified live — both the worker fix and
+the frontend rebuild)
