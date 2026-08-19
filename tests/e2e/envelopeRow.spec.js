@@ -118,25 +118,37 @@ async function mockLoadableAudioTrack(page, { secondTrack = false } = {}) {
   }
 }
 
-test("envelope row is always present, showing the idle hint before any hover", async ({ page }) => {
+test("envelope row is collapsed by default; BEAT toggle reveals the idle hint", async ({ page }) => {
   await mockTracksApi(page);
   await loginToConsole(page);
 
   const canvas = page.locator(".arch-envelope-canvas");
-  await expect(canvas).toBeVisible(); // present even with no track loaded
-
+  const beatBtn = page.locator(".arch-beat-toggle-btn");
   const row = page.locator(".arch-envelope-row");
-  const box1 = await row.boundingBox();
+
+  // No track loaded — BEAT is disabled, matching CUE/loop's existing
+  // disabled-when-empty pattern.
+  await expect(beatBtn).toBeDisabled();
 
   const trackRow = page.locator(".arch-track-row", { hasText: "MANUAL BPM TRACK" });
   await trackRow.dblclick();
+  await expect(beatBtn).toBeEnabled();
+  await expect(beatBtn).toHaveAttribute("aria-pressed", "false");
+
+  // Row stays collapsed after track load — BEAT defaults off, visibility
+  // is decoupled from track state and from hover.
+  const collapsedBox = await row.boundingBox();
+  expect(collapsedBox.height).toBeLessThan(2);
+
+  await beatBtn.click();
+  await expect(beatBtn).toHaveAttribute("aria-pressed", "true");
   await expect(canvas).toBeVisible();
 
-  // Loading a track doesn't shift the row's position — it was already
-  // reserved space, not something that appears. Allow ~1px of sub-pixel
-  // layout jitter, not an exact match.
-  const box2 = await row.boundingBox();
-  expect(Math.abs(box2.y - box1.y)).toBeLessThan(1.5);
+  // Height is CSS-transitioned (220ms) — poll rather than reading
+  // boundingBox() synchronously right after the click.
+  await expect
+    .poll(async () => (await row.boundingBox()).height)
+    .toBeGreaterThan(20);
 });
 
 test("shows unavailable rather than crashing when hovering a track with no resolvable BPM", async ({ page }) => {
@@ -145,6 +157,7 @@ test("shows unavailable rather than crashing when hovering a track with no resol
 
   const trackRow = page.locator(".arch-track-row", { hasText: "NO DETECTION YET" });
   await trackRow.dblclick();
+  await page.locator(".arch-beat-toggle-btn").click(); // BEAT defaults off
 
   const canvas = page.locator(".arch-envelope-canvas");
   const idleImage = await canvas.evaluate((el) => el.toDataURL());
@@ -178,6 +191,7 @@ test("hovering a track with real analysis data redraws the envelope trace", asyn
   // Loading (real, decoded) audio is async — wait for the waveform-bin fetch
   // it triggers to actually land before asserting on canvas content.
   await page.waitForResponse((res) => res.url().includes("/tracks/9002/waveform-bin"));
+  await page.locator(".arch-beat-toggle-btn").click(); // BEAT defaults off
 
   const canvas = page.locator(".arch-envelope-canvas");
   const idleImage = await canvas.evaluate((el) => el.toDataURL());
@@ -212,6 +226,7 @@ test("mouse leaving the waveform returns the row to its idle hint", async ({ pag
   const trackRow = page.locator(".arch-track-row", { hasText: "HIGH CONFIDENCE DETECTED" });
   await trackRow.dblclick();
   await page.waitForResponse((res) => res.url().includes("/tracks/9002/waveform-bin"));
+  await page.locator(".arch-beat-toggle-btn").click(); // BEAT defaults off
 
   const canvas = page.locator(".arch-envelope-canvas");
   const idleImage = await canvas.evaluate((el) => el.toDataURL());
@@ -240,6 +255,7 @@ test("switching between two real-data tracks re-keys the envelope, doesn't bleed
   const trackA = page.locator(".arch-track-row", { hasText: "HIGH CONFIDENCE DETECTED" });
   await trackA.dblclick();
   await page.waitForResponse((res) => res.url().includes("/tracks/9002/waveform-bin"));
+  await page.locator(".arch-beat-toggle-btn").click(); // BEAT defaults off, stays on across track switches
   await page.locator(".arch-waveform-main").hover();
   await page.waitForTimeout(200);
   const trackAHoverImage = await canvas.evaluate((el) => el.toDataURL());

@@ -2805,6 +2805,12 @@ function ArchitectConsole({
   const isD = viewer === "D";
   const envelopeIdentityColor = isD ? "#14dc14" : "#00e5ff";
 
+  // Beat-detect (onset-envelope) row visibility — decoupled from waveform
+  // hover on purpose (hover already controls zoom via waveformHoveredRef;
+  // reusing the same gesture for two different things was the bug this
+  // toggle exists to fix). Default OFF so the deck starts collapsed.
+  const [beatDetectVisible, setBeatDetectVisible] = useState(false);
+
   // T11 — recompute the onset envelope once per track load (not per hover —
   // onsetEnvelope is O(n) but wasteful re-run dozens of times/sec while
   // scrubbing), cached keyed by track id so a fast deck switch can't render
@@ -2827,7 +2833,7 @@ function ArchitectConsole({
   // BEAT_DETECTOR_FRAME_RATE) — this file already assumes 50 bars/sec
   // elsewhere (zoom-window math above) without a shared named constant.
   const ENVELOPE_BARS_PER_SEC = 50;
-  const ENVELOPE_ROW_H = 36;
+  const ENVELOPE_ROW_H = 24;
 
   function drawEnvelopeRow() {
     const canvas = envelopeCanvasRef.current;
@@ -2906,8 +2912,24 @@ function ArchitectConsole({
   }
 
   const handleEnvelopeHover = (time) => {
+    // Skip the redraw entirely while collapsed — otherwise this fires on
+    // every mousemove into a 0-height, invisible canvas whenever BEAT is
+    // off (the default state).
+    if (!beatDetectVisible) return;
     envelopeHoverRef.current = time;
     drawEnvelopeRow();
+  };
+
+  const handleBeatToggle = () => {
+    setBeatDetectVisible((v) => {
+      const next = !v;
+      // Flipping state alone doesn't repaint the canvas — drawEnvelopeRow()
+      // only runs from hover or track-load. Draw immediately on turning on,
+      // so the row shows the idle hint right away instead of stale/blank
+      // content until the next hover.
+      if (next) drawEnvelopeRow();
+      return next;
+    });
   };
 
   return (
@@ -3030,6 +3052,16 @@ function ArchitectConsole({
             {tapHintVisible && (
               <span className="arch-stat arch-tap-hint">keep tapping…</span>
             )}
+            <button
+              type="button"
+              className={`god-btn arch-beat-toggle-btn${beatDetectVisible ? " active" : ""}`}
+              onClick={handleBeatToggle}
+              disabled={!deckTrack}
+              aria-pressed={beatDetectVisible}
+              title="Show/hide beat-detection readout"
+            >
+              BEAT
+            </button>
             <span
               className={`arch-stat arch-elapsed${isPlaying ? " arch-elapsed--playing" : ""}`}
             >
@@ -3148,10 +3180,13 @@ function ArchitectConsole({
           </div>
         </div>
 
-        {/* T11 — onset-envelope explainability row. Always present (idle hint
-            when not hovering) so nothing else in the console shifts position
-            when it activates. */}
-        <div className="arch-envelope-row" aria-hidden="true">
+        {/* T11 — onset-envelope explainability row. Collapses to 0 height
+            when BEAT is off (default); the BEAT toggle in the BPM row
+            controls visibility, not waveform hover. */}
+        <div
+          className={`arch-envelope-row${beatDetectVisible ? " arch-envelope-row--open" : ""}`}
+          aria-hidden="true"
+        >
           <canvas
             ref={envelopeCanvasRef}
             className="arch-envelope-canvas"
