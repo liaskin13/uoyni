@@ -102,6 +102,14 @@ describe("redeemCode", () => {
     expect(fp2).toBe(fp1);
   });
 
+  it("sends a fingerprint on all redeem requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve(MOCK_REDEMPTION) });
+    vi.stubGlobal("fetch", fetchMock);
+    await redeemCode("test-uuid-abc");
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.fingerprint).toBeTruthy();
+  });
+
   it("POSTs to /redeem with the code in the body", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve(MOCK_REDEMPTION) });
     vi.stubGlobal("fetch", fetchMock);

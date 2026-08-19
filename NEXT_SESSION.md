@@ -6,6 +6,15 @@ context-save/learn closeout)
 
 ## Status
 
+**2026-08-18 checkpoint note:** saved the current repo state to the gstack
+checkpoint path and confirmed there is no dedicated stale-agent registry in
+this repo. The active stale-work sources are the live notes in [NEXT_SESSION.md](NEXT_SESSION.md)
+and [TODOS.md](TODOS.md), not a separate agent index.
+
+Current stale/unfinished items to carry forward: T12 cross-instrument pulse,
+GOD MODE MOBILE guest-flow redesign, octave-correction UX, the unresolved
+Codespace GPG-signing root cause, and the request-review queue work.
+
 **2026-08-17 final ship note:** the `feat/gapless-loop-engine` branch was
 verified and deployed as a Pages preview. The live verification path was:
 `npm run preflight` → passed, then `npx wrangler pages deploy dist --project-name psoulc` → success.

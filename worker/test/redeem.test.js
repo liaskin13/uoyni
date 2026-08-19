@@ -53,7 +53,10 @@ beforeEach(async () => {
   await env.PSC_DB.prepare("DELETE FROM access_codes").run();
 });
 
-describe("POST /redeem — 0000 test bypass", () => {
+describe("POST /redeem — 0000 public listener code", () => {
+  // NOT a test-only backdoor — this is the live, permanent code
+  // RequestAccessModal.jsx shows to every guest who requests listening
+  // access. Must stay unconditionally valid in production.
   it("is structurally exempt from binding — no row needed, always valid", async () => {
     const res = await redeem("0000", "any-fingerprint");
     expect(res.status).toBe(200);
@@ -66,6 +69,13 @@ describe("POST /redeem — 0000 test bypass", () => {
     expect(first.status).toBe(200);
     const second = await redeem("0000", "device-b");
     expect(second.status).toBe(200);
+  });
+
+  it("still requires a fingerprint like every other redemption — real browser clients always send one", async () => {
+    const res = await redeem("0000", undefined);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/missing fingerprint/i);
   });
 });
 
@@ -95,6 +105,14 @@ describe("POST /redeem — not found / revoked / expired", () => {
 });
 
 describe("POST /redeem — single-device binding", () => {
+  it("rejects redemption when the device fingerprint is missing", async () => {
+    await seedCode({ id: "NOFP0" });
+    const res = await redeem("NOFP0", undefined);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/missing fingerprint/i);
+  });
+
   it("claims an unredeemed code on first redemption", async () => {
     await seedCode({ id: "FRESH1" });
     const res = await redeem("FRESH1", "device-a");
@@ -132,16 +150,20 @@ describe("POST /redeem — single-device binding", () => {
     expect(row.redeemed_by).toBe("device-a");
   });
 
-  it("skips enforcement when the incoming fingerprint is missing (not treated as a match or a new claim)", async () => {
+  it("rejects an already-claimed code when the incoming fingerprint is missing", async () => {
     await seedCode({ id: "NOFP01", redeemed_at: "2026-01-01T00:00:00Z", redeemed_by: "device-a" });
     const res = await redeem("NOFP01", undefined);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/missing fingerprint/i);
   });
 
-  it("does not reject a fresh, never-claimed code when fingerprint is missing", async () => {
+  it("rejects a fresh, never-claimed code when fingerprint is missing", async () => {
     await seedCode({ id: "NOFP02" });
     const res = await redeem("NOFP02", undefined);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/missing fingerprint/i);
   });
 
   it("a post-reset code (redeemed_by NULL, redeemed_at set) behaves as unclaimed, not as a first-ever redemption error", async () => {

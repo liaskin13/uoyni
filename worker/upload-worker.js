@@ -88,12 +88,10 @@ export default {
       // Validates code and returns tier; grants access to all published content.
       if (request.method === "POST" && url.pathname === "/redeem") {
         // Rate limit before anything else — this endpoint is public and
-        // unauthenticated. Closes two gaps: brute-forcing the 4-digit code
-        // space (pre-existing, unrelated to binding), and the fact that
-        // omitting "fingerprint" from the body is a trivial full bypass of
-        // the device-binding check below (skip-on-null is intentional for
-        // real clients with blocked storage, but must not be a free pass
-        // for a scripted attacker).
+        // unauthenticated. Brute-forcing the 4-digit code space remains a
+        // concern, and same-device redemption must never be bypassed by
+        // an empty or missing fingerprint. The access grant is tied to the
+        // device the guest actually uses to open the flow.
         const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
         const { success: withinRateLimit } = await env.REDEEM_RATE_LIMITER.limit({ key: clientIp });
         if (!withinRateLimit) {
@@ -105,13 +103,17 @@ export default {
         if (!code) {
           return new Response(JSON.stringify({ error: "Missing code" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
-        // TEST BYPASS — remove before public launch. Structurally exempt
-        // from device binding: returns before the row lookup, so 0000
-        // stays an unlimited-use test code regardless of the logic below.
+        if (!fingerprint || typeof fingerprint !== "string" || fingerprint.trim() === "") {
+          return new Response(JSON.stringify({ error: "Missing fingerprint" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        // 0000 is NOT a test-only backdoor — it's the live, permanent public
+        // listener-access code. src/entry/RequestAccessModal.jsx shows it to
+        // every guest who requests listening access ("YOUR CODE: 0000...
+        // unlocks all listening frequencies. No review required."). It must
+        // stay unconditionally available in production. Do not gate it
+        // behind an env var or remove it — that breaks real guest onboarding.
         if (code === "0000") {
-          return new Response(JSON.stringify({ valid: true, tier: "MEMBERS", grantedTo: "TEST" }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+          return new Response(JSON.stringify({ valid: true, tier: "MEMBERS", grantedTo: "TEST" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
         const row = await env.PSC_DB.prepare(
           "SELECT id, tier, granted_to, revoked, expires_at, redeemed_at, redeemed_by FROM access_codes WHERE id = ?"

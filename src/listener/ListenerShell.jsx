@@ -1,14 +1,14 @@
-import React, {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-} from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import DPWallpaper from "../components/DPWallpaper";
 import TheSignal from "../signal/TheSignal";
 import ListenerVaultView from "./ListenerVaultView";
-import { VAULT_ACCENT_COLORS, UPLOAD_WORKER_URL } from "../config";
+import {
+  VAULT_ACCENT_COLORS,
+  UPLOAD_WORKER_URL,
+  SESSION_KEY,
+  SESSION_TTL_MS,
+} from "../config";
 import { fetchPublishedVaultTracks } from "../lib/tracks";
 import PSCWordmark from "../components/PSCWordmark";
 import { redeemCode } from "../lib/accessCodes";
@@ -79,7 +79,10 @@ function CodeGate({ code, onGranted }) {
       <p className="code-gate-message">{messages[status]}</p>
       <button
         className="code-gate-close god-btn"
-        onClick={() => { window.history.back(); window.close(); }}
+        onClick={() => {
+          window.history.back();
+          window.close();
+        }}
       >
         CLOSE
       </button>
@@ -88,30 +91,64 @@ function CodeGate({ code, onGranted }) {
 }
 
 function formatDurationHero(totalSecs) {
-  if (!totalSecs) return '--';
+  if (!totalSecs) return "--";
   const h = Math.floor(totalSecs / 3600);
   const m = Math.floor((totalSecs % 3600) / 60);
   return `${h}H ${m}M`;
 }
 
-const PSC_SESSION_KEY = 'psc_session';
-const SESSION_TTL_MS  = 20 * 24 * 60 * 60 * 1000; // 20 days
-
 function readPersistedSession() {
   try {
-    const saved = JSON.parse(localStorage.getItem(PSC_SESSION_KEY) || 'null');
-    if (saved?.grantedTo && saved.savedAt && Date.now() - saved.savedAt < SESSION_TTL_MS) {
+    const saved = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+    // `code` is required to background-revalidate (see the isRevalidating
+    // effect below) but NOT to accept the session — a guest who logged in
+    // before this field existed still has a legitimate, unexpired session
+    // and shouldn't be silently signed out. Sessions without `code` just
+    // never revalidate (isRevalidating stays false for them), same as
+    // before this feature existed.
+    if (
+      saved?.grantedTo &&
+      saved.savedAt &&
+      Date.now() - saved.savedAt < SESSION_TTL_MS
+    ) {
       return saved;
     }
   } catch (_) {}
   return null;
 }
 
+function clearPersistedSession() {
+  try {
+    localStorage.removeItem(SESSION_KEY);
+  } catch (_) {}
+}
+
+function saveGuestSession(data, code) {
+  const session = {
+    ...data,
+    code: data?.code || code,
+    savedAt: Date.now(),
+    expires: Date.now() + SESSION_TTL_MS,
+  };
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } catch (_) {}
+  return session;
+}
+
 function ListenerShell({ onPowerDown, sessionMeta, code, onGodModeMobile }) {
-  const [codeSession, setCodeSession] = useState(() => readPersistedSession());
+  const [initialSession] = useState(() =>
+    code ? null : readPersistedSession(),
+  );
+  const [codeSession, setCodeSession] = useState(initialSession);
+  const [isRevalidating, setIsRevalidating] = useState(
+    Boolean(initialSession?.code),
+  );
   const [showWelcome, setShowWelcome] = useState(false);
   const [vaults, setVaults] = useState(LISTENER_VAULTS_FALLBACK);
-  const [selectedVaultId, setSelectedVaultId] = useState(LISTENER_VAULTS_FALLBACK[0].id);
+  const [selectedVaultId, setSelectedVaultId] = useState(
+    LISTENER_VAULTS_FALLBACK[0].id,
+  );
   const [activeVault, setActiveVault] = useState(null);
   const [vaultStats, setVaultStats] = useState({});
   const [inSignal, setInSignal] = useState(false);
@@ -122,7 +159,8 @@ function ListenerShell({ onPowerDown, sessionMeta, code, onGodModeMobile }) {
   const prefersReduced = useReducedMotion();
 
   // Derive selectedVault from current vaults list
-  const selectedVault = vaults.find(v => v.id === selectedVaultId) ?? vaults[0];
+  const selectedVault =
+    vaults.find((v) => v.id === selectedVaultId) ?? vaults[0];
 
   const fetchSignal = useCallback(async () => {
     try {
@@ -134,10 +172,10 @@ function ListenerShell({ onPowerDown, sessionMeta, code, onGodModeMobile }) {
   // Fetch published vaults from worker — replaces fallback when ready
   useEffect(() => {
     fetch(`${WORKER_URL}/vaults`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
         if (!data || data.length === 0) return;
-        const normalized = data.map(v => ({
+        const normalized = data.map((v) => ({
           id: v.vault_id,
           label: v.label,
           color: v.color ?? null,
@@ -151,13 +189,18 @@ function ListenerShell({ onPowerDown, sessionMeta, code, onGodModeMobile }) {
 
   useEffect(() => {
     if (!selectedVaultId) return;
-    fetchPublishedVaultTracks(selectedVaultId).then(tracks => {
-      const totalDuration = tracks.reduce((sum, t) => sum + (Number(t.duration) || 0), 0);
-      setVaultStats(prev => ({
-        ...prev,
-        [selectedVaultId]: { totalDuration, count: tracks.length },
-      }));
-    }).catch(() => {});
+    fetchPublishedVaultTracks(selectedVaultId)
+      .then((tracks) => {
+        const totalDuration = tracks.reduce(
+          (sum, t) => sum + (Number(t.duration) || 0),
+          0,
+        );
+        setVaultStats((prev) => ({
+          ...prev,
+          [selectedVaultId]: { totalDuration, count: tracks.length },
+        }));
+      })
+      .catch(() => {});
   }, [selectedVaultId]);
 
   useEffect(() => {
@@ -177,15 +220,50 @@ function ListenerShell({ onPowerDown, sessionMeta, code, onGodModeMobile }) {
     return () => window.clearTimeout(t);
   }, [codeSession]);
 
-  const handleGranted = useCallback((data) => {
-    const session = { ...data, savedAt: Date.now() };
-    setCodeSession(session);
-    try { localStorage.setItem(PSC_SESSION_KEY, JSON.stringify(session)); } catch (_) {}
-  }, []);
+  useEffect(() => {
+    if (code || !isRevalidating || !codeSession?.code) return;
+    let active = true;
+    redeemCode(codeSession.code)
+      .then((data) => {
+        if (!active) return;
+        setCodeSession(saveGuestSession(data, codeSession.code));
+      })
+      .catch((err) => {
+        if (!active) return;
+        if ([404, 409, 410].includes(err.status)) {
+          clearPersistedSession();
+          setCodeSession(null);
+        }
+      })
+      .finally(() => {
+        if (active) setIsRevalidating(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [code, codeSession?.code, isRevalidating]);
+
+  const handleGranted = useCallback(
+    (data) => {
+      const session = saveGuestSession(data, code);
+      setCodeSession(session);
+    },
+    [code],
+  );
 
   // ── CODE GATE — all hooks above, conditional return is safe here ───────────
   if (code && !codeSession) {
     return <CodeGate code={code} onGranted={handleGranted} />;
+  }
+
+  if (isRevalidating) {
+    return (
+      <div className="code-gate" aria-live="polite">
+        <DPWallpaper opacity={1} />
+        <div className="code-gate-identity-glow" aria-hidden="true" />
+        <span className="code-gate-status">VERIFYING</span>
+      </div>
+    );
   }
 
   const openVault = (vault) => {
@@ -248,7 +326,7 @@ function ListenerShell({ onPowerDown, sessionMeta, code, onGodModeMobile }) {
 
   // ── VAULT INTERIOR ───────────────────────────────────────────────
   if (activeVault) {
-    const activeVaultObj = vaults.find(v => v.id === activeVault);
+    const activeVaultObj = vaults.find((v) => v.id === activeVault);
     return (
       <ListenerVaultView
         key={activeVault}
@@ -262,7 +340,9 @@ function ListenerShell({ onPowerDown, sessionMeta, code, onGodModeMobile }) {
   }
 
   // ── MAIN SHELL ───────────────────────────────────────────────────
-  const shellStyle = selectedVault?.color ? { '--vault-color': selectedVault.color } : undefined;
+  const shellStyle = selectedVault?.color
+    ? { "--vault-color": selectedVault.color }
+    : undefined;
 
   return (
     <div className="listener-shell" style={shellStyle}>
@@ -274,7 +354,9 @@ function ListenerShell({ onPowerDown, sessionMeta, code, onGodModeMobile }) {
           <span className="listener-header-kicker">LISTENING ROOM</span>
           <span className="listener-header-owner">CURATED BY D</span>
           {codeSession?.grantedTo && (
-            <span className="listener-header-guest">{codeSession.grantedTo}</span>
+            <span className="listener-header-guest">
+              {codeSession.grantedTo}
+            </span>
           )}
         </div>
         <div className="listener-header-actions">
@@ -289,7 +371,14 @@ function ListenerShell({ onPowerDown, sessionMeta, code, onGodModeMobile }) {
           )}
           <button
             className="listener-exit"
-            onClick={code ? () => { window.history.back(); window.close(); } : onPowerDown}
+            onClick={
+              code
+                ? () => {
+                    window.history.back();
+                    window.close();
+                  }
+                : onPowerDown
+            }
             aria-label={code ? "Close" : "Exit system"}
           >
             {code ? "CLOSE" : "EXIT"}
@@ -324,7 +413,7 @@ function ListenerShell({ onPowerDown, sessionMeta, code, onGodModeMobile }) {
         className="listener-stage"
         id="main-content"
         onClick={selectedVault ? () => openVault(selectedVault) : undefined}
-        style={selectedVault ? { cursor: 'pointer' } : undefined}
+        style={selectedVault ? { cursor: "pointer" } : undefined}
         aria-label={selectedVault ? `Open ${selectedVault.label}` : undefined}
       >
         {selectedVault ? (
@@ -341,11 +430,15 @@ function ListenerShell({ onPowerDown, sessionMeta, code, onGodModeMobile }) {
                 {formatDurationHero(vaultStats[selectedVaultId]?.totalDuration)}
               </p>
               <p className="ls-duration-subtitle">
-                {selectedVault.label} · {vaultStats[selectedVaultId]?.count ?? '--'} SESSIONS
+                {selectedVault.label} ·{" "}
+                {vaultStats[selectedVaultId]?.count ?? "--"} SESSIONS
               </p>
               <p className="ls-duration-meta">
-                {selectedVault.copy.split(' · ').map((phrase, i, arr) => (
-                  <span key={i}>{phrase}{i < arr.length - 1 && <br />}</span>
+                {selectedVault.copy.split(" · ").map((phrase, i, arr) => (
+                  <span key={i}>
+                    {phrase}
+                    {i < arr.length - 1 && <br />}
+                  </span>
                 ))}
               </p>
               <div className="listener-stage-rule" aria-hidden="true" />
@@ -395,10 +488,22 @@ function ListenerShell({ onPowerDown, sessionMeta, code, onGodModeMobile }) {
           >
             <span className="listener-welcome-kicker">WELCOME</span>
             {codeSession?.grantedTo && (
-              <span className="listener-welcome-name">{codeSession.grantedTo.toUpperCase()}</span>
+              <span className="listener-welcome-name">
+                {codeSession.grantedTo.toUpperCase()}
+              </span>
             )}
             <span className="listener-welcome-sub">CURATED BY D</span>
-            <span className="listener-welcome-browse">BROWSE THE VAULTS BELOW</span>
+            {codeSession?.code && (
+              <>
+                <span className="listener-welcome-save">SAVE THIS CODE</span>
+                <span className="listener-welcome-code">
+                  {codeSession.code}
+                </span>
+              </>
+            )}
+            <span className="listener-welcome-browse">
+              BROWSE THE VAULTS BELOW
+            </span>
           </motion.div>
         )}
       </AnimatePresence>

@@ -103,6 +103,15 @@ function EntrySequence({ onIgnite }) {
       setIsVerifying(true);
       try {
         const data = await redeemCode(code);
+        const session = {
+          ...data,
+          code,
+          savedAt: Date.now(),
+          expires: Date.now() + SESSION_TTL_MS,
+        };
+        try {
+          localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+        } catch (_) {}
         clearLock();
         setIsVerifying(false);
         setCellState("correct");
@@ -205,15 +214,19 @@ function EntrySequence({ onIgnite }) {
       </div>
 
       {/* Bottom-right — mystery code cells */}
-      <div className="entry-code-corner" role="group" aria-label="Access code entry">
+      <div
+        className="entry-code-corner"
+        role="group"
+        aria-label="Access code entry"
+      >
         <p className="entry-code-hint">ENTER CODE</p>
         <div className="entry-cells">{cells}</div>
         <div className="entry-err" aria-live="polite">
           {lockoutRemaining > 0
             ? `LOCKED ${Math.ceil(lockoutRemaining / 1000)}s`
             : isVerifying
-            ? "VERIFYING"
-            : errMsg}
+              ? "VERIFYING"
+              : errMsg}
         </div>
       </div>
 
