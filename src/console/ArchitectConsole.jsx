@@ -36,6 +36,7 @@ import {
   WAVEFORM_V2_SENTINEL,
 } from "../lib/waveformAnalyzer";
 import { onsetEnvelope } from "../lib/beatDetector";
+import { computeHotCuePositions, migrateHotCuesToCueList } from "../lib/hotCueLayout";
 import { useValidationSummary, formatValidationSummary } from "../lib/useValidationSummary";
 import { BatchUploadQueue } from "../components/BatchUploadQueue";
 
@@ -95,6 +96,39 @@ const ALL_CUE_COLORS = [
   "#7711cc",
   "#aaaaaa",
 ];
+
+// Bank identity glyph: orientation (points down = A/B, points up = C/D) plus
+// solid-vs-hollow fill (A/C solid, B/D hollow) — an orthogonal 2-bit encoding
+// so bank identity never depends on hue, which is already spent identifying
+// each individual cue (ALL_CUE_COLORS). Uses currentColor so it inherits
+// exactly the same ghost/occupied color swap the pad's CSS `color` already
+// drives — no separate empty/occupied styling needed here.
+const CUE_BANK_SHAPE = {
+  A: { pointsDown: true, solid: true },
+  B: { pointsDown: true, solid: false },
+  C: { pointsDown: false, solid: true },
+  D: { pointsDown: false, solid: false },
+};
+
+function CueBankGlyph({ bank }) {
+  const { pointsDown, solid } = CUE_BANK_SHAPE[bank] || CUE_BANK_SHAPE.A;
+  const d = pointsDown ? "M6 11 L11 1 L1 1 Z" : "M6 1 L11 11 L1 11 Z";
+  return (
+    <svg
+      className="arch-hotcue-glyph"
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      aria-hidden="true"
+    >
+      {solid ? (
+        <path d={d} fill="currentColor" />
+      ) : (
+        <path d={d} fill="none" stroke="currentColor" strokeWidth="1.5" />
+      )}
+    </svg>
+  );
+}
 
 const LOOP_LENGTH_OPTIONS = [
   { id: "1-32", label: "1/32", type: "note", denominator: 32 },
@@ -703,19 +737,36 @@ function ArchitectConsole({
   const [tapCount, setTapCount] = useState(0);
   const [tapHintVisible, setTapHintVisible] = useState(false);
 
-  // Hot cues: { trackId: { 1: { time: 10.5 }, 2: { time: 45.2 }, ... } }
+  // Hot cues: { trackId: [{ id, time, label, pinned, slot }, ...] }. `slot`
+  // (1-32) is the pad a cue was originally set on / is frozen to once pinned
+  // (labeled) — it's the fallback address when auto-sort is off, and the
+  // permanent address once pinned. When auto-sort is on, an unpinned cue's
+  // actual displayed pad is computed fresh by computeHotCuePositions, not
+  // read from `slot`.
   const [hotCues, setHotCues] = useState(() => {
     try {
       const stored = localStorage.getItem("psc_hotcues");
-      return stored ? JSON.parse(stored) : {};
+      return stored ? migrateHotCuesToCueList(JSON.parse(stored)) : {};
     } catch {
       return {};
     }
   });
+  const [autoSortCues, setAutoSortCues] = useState(() => {
+    try {
+      const stored = localStorage.getItem("psc_hotcue_autosort");
+      return stored === null ? true : stored === "true";
+    } catch {
+      return true;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("psc_hotcue_autosort", String(autoSortCues));
+    } catch (_) {}
+  }, [autoSortCues]);
   const [activeCueBank, setActiveCueBank] = useState("A");
-  const [editingCueNum, setEditingCueNum] = useState(null); // D-bank: internal cue number being label-edited
+  const [editingCueNum, setEditingCueNum] = useState(null); // internal cue number being label-edited
   const [editingCueLabel, setEditingCueLabel] = useState("");
-  const [cueClearConfirm, setCueClearConfirm] = useState(new Set());
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [loopRegion, setLoopRegion] = useState({ start: null, end: null });
   const [selectedLoopLengthId, setSelectedLoopLengthId] = useState("1-4");
@@ -742,7 +793,6 @@ function ArchitectConsole({
   const announceTimerRef = useRef(null);
   const systemStatusTimerRef = useRef(null);
   const retractTimerRef = useRef(null);
-  const cueClearTimers = useRef({});
   const kbRef = useRef({});
   const tabRefs = useRef([]);
   const gliderRef = useRef(null);
@@ -809,7 +859,9 @@ function ArchitectConsole({
     waveformData: deckHighResBars || loadedWaveformHighData,
     currentTime,
     duration: audioDuration,
-    hotCues: deckTrack ? hotCues[deckTrack.id] || {} : {},
+    hotCues: deckTrack
+      ? computeHotCuePositions(hotCues[deckTrack.id] || [], autoSortCues)
+      : {},
   });
 
   const [liveBpm, setLiveBpm] = useState(null);
@@ -2094,6 +2146,14 @@ function ArchitectConsole({
   };
 
   const bankIndex = { A: 0, B: 1, C: 2, D: 3 }[activeCueBank];
+  const bankLetters = ["A", "B", "C", "D"];
+
+  // The single source of truth for "which cue is on which pad." Toggle off
+  // reproduces the old fixed-slot behavior exactly; toggle on computes
+  // position from time order, holding pinned (labeled) cues at their frozen
+  // slot. Every pad-lookup below reads from this instead of hotCues directly.
+  const activeTrackCuesRaw = loadedTrack ? hotCues[loadedTrack.id] || [] : [];
+  const cuePositions = computeHotCuePositions(activeTrackCuesRaw, autoSortCues);
 
   const handleHotCueClick = (displayNum) => {
     if (!loadedTrack) {
@@ -2101,9 +2161,8 @@ function ArchitectConsole({
       return;
     }
     const trackId = loadedTrack.id;
-    const trackCues = hotCues[trackId] || {};
     const internalNum = bankIndex * 8 + displayNum;
-    const existingCue = trackCues[internalNum];
+    const existingCue = cuePositions[internalNum];
 
     if (existingCue) {
       // Jump to existing cue
@@ -2114,30 +2173,51 @@ function ArchitectConsole({
       const time = quantizeEnabled
         ? quantizeToBeat(currentTime, () => resolveTrackBpm(loadedTrack))
         : currentTime;
-      const updated = {
-        ...hotCues,
-        [trackId]: {
-          ...trackCues,
-          [internalNum]: { time },
-        },
+      const trackCuesRaw = hotCues[trackId] || [];
+      const newCue = {
+        id: crypto.randomUUID(),
+        time,
+        label: "",
+        pinned: false,
+        slot: internalNum,
       };
+      const updatedTrackCues = [...trackCuesRaw, newCue];
+      const updated = { ...hotCues, [trackId]: updatedTrackCues };
       setHotCues(updated);
       localStorage.setItem("psc_hotcues", JSON.stringify(updated));
-      announce(
-        `Hot cue ${displayNum} set at ${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, "0")}.`,
-      );
 
-      // Auto-cycle bank if all 8 cues filled
-      const newCues = updated[trackId];
-      const filledInBank = Array.from(
-        { length: 8 },
-        (_, i) => newCues[bankIndex * 8 + i + 1],
-      ).filter(Boolean).length;
-      if (filledInBank === 8) {
-        const banks = ["A", "B", "C", "D"];
-        const nextBank = banks[(bankIndex + 1) % 4];
-        setActiveCueBank(nextBank);
-        announce(`Bank full. Advanced to bank ${nextBank}.`);
+      if (autoSortCues) {
+        // Auto-sort may not land the new cue on the pad that was clicked —
+        // tell the DJ where it actually ended up.
+        const newPositions = computeHotCuePositions(updatedTrackCues, true);
+        const landedSlot = Object.entries(newPositions).find(
+          ([, cue]) => cue.id === newCue.id,
+        )?.[0];
+        const landedBank = landedSlot
+          ? bankLetters[Math.floor((landedSlot - 1) / 8)]
+          : null;
+        const landedDisplayNum = landedSlot ? ((landedSlot - 1) % 8) + 1 : null;
+        announce(
+          landedSlot
+            ? `Cue set at ${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, "0")} — now at pad ${landedBank}${landedDisplayNum}.`
+            : `Hot cue set at ${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, "0")}.`,
+        );
+      } else {
+        announce(
+          `Hot cue ${displayNum} set at ${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, "0")}.`,
+        );
+        // Auto-cycle bank if all 8 cues filled — only meaningful in
+        // fixed-slot (toggle-off) mode, where a bank is a real accumulation
+        // target. In auto-sort mode this doesn't map onto a global
+        // chronological list, so it's skipped there.
+        const filledInBank = updatedTrackCues.filter(
+          (c) => c.slot > bankIndex * 8 && c.slot <= bankIndex * 8 + 8,
+        ).length;
+        if (filledInBank === 8) {
+          const nextBank = bankLetters[(bankIndex + 1) % 4];
+          setActiveCueBank(nextBank);
+          announce(`Bank full. Advanced to bank ${nextBank}.`);
+        }
       }
     }
   };
@@ -2146,11 +2226,12 @@ function ArchitectConsole({
     e.stopPropagation();
     if (!loadedTrack) return;
     const trackId = loadedTrack.id;
-    const trackCues = hotCues[trackId] || {};
     const internalNum = bankIndex * 8 + displayNum;
-    if (!trackCues[internalNum]) return;
+    const cue = cuePositions[internalNum];
+    if (!cue) return;
 
-    const { [internalNum]: removed, ...remaining } = trackCues;
+    const trackCuesRaw = hotCues[trackId] || [];
+    const remaining = trackCuesRaw.filter((c) => c.id !== cue.id);
     const updated = { ...hotCues, [trackId]: remaining };
     setHotCues(updated);
     localStorage.setItem("psc_hotcues", JSON.stringify(updated));
@@ -2174,26 +2255,20 @@ function ArchitectConsole({
     }
 
     const trackId = loadedTrack.id;
-    const trackCues = hotCues[trackId] || {};
-    const cuesToClear = Array.from(
-      { length: 8 },
-      (_, i) => bankIndex * 8 + i + 1,
+    const trackCuesRaw = hotCues[trackId] || [];
+    const idsInBank = new Set(
+      Array.from(
+        { length: 8 },
+        (_, i) => cuePositions[bankIndex * 8 + i + 1]?.id,
+      ).filter(Boolean),
     );
-    let hasChanges = false;
-    const updated = { ...trackCues };
-    cuesToClear.forEach((num) => {
-      if (updated[num]) {
-        delete updated[num];
-        hasChanges = true;
-      }
-    });
+    const hasChanges = idsInBank.size > 0;
+    const remaining = trackCuesRaw.filter((c) => !idsInBank.has(c.id));
 
     if (hasChanges) {
-      setHotCues({ ...hotCues, [trackId]: updated });
-      localStorage.setItem(
-        "psc_hotcues",
-        JSON.stringify({ ...hotCues, [trackId]: updated }),
-      );
+      const updated = { ...hotCues, [trackId]: remaining };
+      setHotCues(updated);
+      localStorage.setItem("psc_hotcues", JSON.stringify(updated));
       announce(`Bank ${activeCueBank} cleared.`);
     } else {
       announce(`No cues in bank ${activeCueBank}.`);
@@ -2285,13 +2360,13 @@ function ArchitectConsole({
   });
 
   const hasHotCuesForLoadedTrack = !!(
-    loadedTrack && Object.keys(hotCues[loadedTrack.id] || {}).length
+    loadedTrack && activeTrackCuesRaw.length
   );
   const hasCuesInCurrentBank = !!(
     loadedTrack &&
     Array.from(
       { length: 8 },
-      (_, i) => hotCues[loadedTrack.id]?.[bankIndex * 8 + i + 1],
+      (_, i) => cuePositions[bankIndex * 8 + i + 1],
     ).some(Boolean)
   );
 
@@ -2712,8 +2787,9 @@ function ArchitectConsole({
     }
 
     // Hot cue pins
-    const deckCues = deckTrack ? hotCues[deckTrack.id] || {} : {};
-    Object.entries(deckCues).forEach(([num, cue]) => {
+    const deckCuesRaw = deckTrack ? hotCues[deckTrack.id] || [] : [];
+    const deckCuePositions = computeHotCuePositions(deckCuesRaw, autoSortCues);
+    Object.entries(deckCuePositions).forEach(([num, cue]) => {
       if (!cue || typeof cue.time !== "number") return;
       const cx = Math.round((cue.time / audioDuration) * w);
       ctx.fillStyle = ALL_CUE_COLORS[parseInt(num, 10) - 1] || "rgba(255,255,255,0.7)";
@@ -2724,7 +2800,7 @@ function ArchitectConsole({
     const playheadPx = Math.round((currentTime / audioDuration) * w);
     ctx.fillStyle = "rgba(255,255,255,0.92)";
     ctx.fillRect(playheadPx, 0, 2, OVERVIEW_H);
-  }, [deckWaveformHighData, currentTime, audioDuration, hotCues, deckTrack, overviewStyle]);
+  }, [deckWaveformHighData, currentTime, audioDuration, hotCues, autoSortCues, deckTrack, overviewStyle]);
 
   const isD = viewer === "D";
   const envelopeIdentityColor = isD ? "#14dc14" : "#00e5ff";
@@ -3052,7 +3128,7 @@ function ArchitectConsole({
                   trackId={deckTrack.id}
                   width={800}
                   height={200}
-                  hotCues={hotCues[deckTrack.id] || {}}
+                  hotCues={computeHotCuePositions(hotCues[deckTrack.id] || [], autoSortCues)}
                   cueColors={ALL_CUE_COLORS}
                   zoom={waveformZoom}
                   loopRegion={loopRegion}
@@ -3113,12 +3189,9 @@ function ArchitectConsole({
               <div className="arch-cue-bank-selector">
                 {["A", "B", "C", "D"].map((bank) => {
                   const bIdx = { A: 0, B: 1, C: 2, D: 3 }[bank];
-                  const trackCues = loadedTrack
-                    ? hotCues[loadedTrack.id] || {}
-                    : {};
                   const bankOccupancy = Array.from(
                     { length: 8 },
-                    (_, i) => !!trackCues[bIdx * 8 + i + 1],
+                    (_, i) => !!cuePositions[bIdx * 8 + i + 1],
                   );
                   return (
                     <button
@@ -3155,68 +3228,60 @@ function ArchitectConsole({
               >
                 CLR
               </button>
+              <button
+                className={`arch-cue-sort-btn${autoSortCues ? " active" : ""}`}
+                onClick={() => setAutoSortCues((v) => !v)}
+                aria-pressed={autoSortCues}
+                title={
+                  autoSortCues
+                    ? "Cues auto-sort chronologically across all 32 pads (labeled cues stay pinned). Click to turn off."
+                    : "Cues stay on the pad they were set on. Click to turn on chronological auto-sort."
+                }
+              >
+                SORT {autoSortCues ? "ON" : "OFF"}
+              </button>
             </div>
             <div
-              className="arch-hotcues"
+              className={`arch-hotcues arch-hotcues--${activeCueBank}`}
               role="group"
               aria-label={`Hot cues bank ${activeCueBank}`}
             >
               {Array.from({ length: 8 }, (_, i) => i + 1).map((displayNum) => {
-                const trackCues = loadedTrack
-                  ? hotCues[loadedTrack.id] || {}
-                  : {};
                 const internalNum = bankIndex * 8 + displayNum;
-                const cue = trackCues[internalNum];
+                const cue = cuePositions[internalNum];
                 const color = ALL_CUE_COLORS[internalNum - 1];
-                const isDBank = activeCueBank === "D";
                 const isEditing = editingCueNum === internalNum;
 
+                // Every bank renames on double-click now (matches what D-bank
+                // already did) — the old double-click-twice clear-confirm
+                // gesture on A/B/C is dropped as fully redundant with the
+                // always-visible × clear button.
                 const handleDblClick = (e) => {
                   e.stopPropagation();
-                  if (isDBank) {
-                    setEditingCueNum(internalNum);
-                    setEditingCueLabel(cue?.label || "");
-                    return;
-                  }
                   if (!cue) return;
-                  if (cueClearConfirm.has(internalNum)) {
-                    // Second double-click: confirmed — clear
-                    clearTimeout(cueClearTimers.current[internalNum]);
-                    delete cueClearTimers.current[internalNum];
-                    setCueClearConfirm((prev) => {
-                      const next = new Set(prev);
-                      next.delete(internalNum);
-                      return next;
-                    });
-                    clearHotCue(displayNum, e);
-                  } else {
-                    // First double-click: arm confirm with 3s auto-cancel
-                    setCueClearConfirm(
-                      (prev) => new Set([...prev, internalNum]),
-                    );
-                    cueClearTimers.current[internalNum] = setTimeout(() => {
-                      setCueClearConfirm((prev) => {
-                        const next = new Set(prev);
-                        next.delete(internalNum);
-                        return next;
-                      });
-                    }, 3000);
-                  }
+                  setEditingCueNum(internalNum);
+                  setEditingCueLabel(cue.label || "");
                 };
 
                 const saveCueLabel = () => {
-                  if (!loadedTrack) return;
+                  if (!loadedTrack || !cue) return;
                   const trackId = loadedTrack.id;
-                  const updated = {
-                    ...hotCues,
-                    [trackId]: {
-                      ...(hotCues[trackId] || {}),
-                      [internalNum]: {
-                        ...(hotCues[trackId]?.[internalNum] || {}),
-                        label: editingCueLabel.trim(),
-                      },
-                    },
-                  };
+                  const trimmed = editingCueLabel.trim();
+                  const trackCuesRaw = hotCues[trackId] || [];
+                  const updatedTrackCues = trackCuesRaw.map((c) =>
+                    c.id === cue.id
+                      ? {
+                          ...c,
+                          label: trimmed,
+                          pinned: !!trimmed,
+                          // Freeze at (or release from) the pad currently
+                          // showing this cue — pinning locks it here,
+                          // un-pinning lets it rejoin the sort next render.
+                          slot: internalNum,
+                        }
+                      : c,
+                  );
+                  const updated = { ...hotCues, [trackId]: updatedTrackCues };
                   setHotCues(updated);
                   try {
                     localStorage.setItem(
@@ -3227,28 +3292,19 @@ function ArchitectConsole({
                   setEditingCueNum(null);
                 };
 
-                const isClearPending = cueClearConfirm.has(internalNum);
                 return (
                   <button
                     key={displayNum}
-                    className={`arch-hotcue${cue ? " has-cue" : ""}${isClearPending ? " clearing" : ""}`}
+                    className={`arch-hotcue${cue ? " has-cue" : ""}`}
                     aria-label={
-                      isDBank
-                        ? `Cue D${displayNum}${cue?.label ? ` — ${cue.label}` : ""} — double-click to name`
-                        : isClearPending
-                          ? `Hot cue ${displayNum} — double-click again to confirm clear`
-                          : cue
-                            ? `Hot cue ${displayNum} — double-click to clear`
-                            : `Hot cue ${displayNum}`
+                      cue
+                        ? `Cue ${activeCueBank}${displayNum}${cue.label ? ` — ${cue.label}` : ""} — double-click to name, click to jump`
+                        : `Hot cue ${activeCueBank}${displayNum} — empty`
                     }
                     title={
-                      isDBank
-                        ? `D-bank ${displayNum}${cue?.label ? `: ${cue.label}` : ""} — double-click to name`
-                        : isClearPending
-                          ? `Double-click again to clear — auto-cancels in 3s`
-                          : cue
-                            ? `Hot cue ${displayNum} at ${cue.time?.toFixed(1)}s — click to jump, double-click to clear`
-                            : `Hot cue ${displayNum} — click while playing to set`
+                      cue
+                        ? `${activeCueBank}${displayNum}${cue.label ? `: ${cue.label}` : ""} at ${cue.time?.toFixed(1)}s — click to jump`
+                        : `${activeCueBank}${displayNum} — click while playing to set`
                     }
                     onClick={() => handleHotCueClick(displayNum)}
                     onDoubleClick={handleDblClick}
@@ -3281,10 +3337,16 @@ function ArchitectConsole({
                         }}
                         onClick={(e) => e.stopPropagation()}
                       />
-                    ) : isDBank && cue?.label ? (
-                      cue.label
                     ) : (
-                      displayNum
+                      <>
+                        <CueBankGlyph bank={activeCueBank} />
+                        {cue?.label && (
+                          <span className="arch-hotcue-label">{cue.label}</span>
+                        )}
+                        <span className="arch-hotcue-hint" aria-hidden="true">
+                          DOUBLE-CLICK TO EDIT
+                        </span>
+                      </>
                     )}
                   </button>
                 );

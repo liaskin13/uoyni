@@ -1273,11 +1273,21 @@
   gap: 3px;
 }
 
+/* Bank identity — border style reinforces the pad glyph's solid/hollow fill
+   (A/C solid+solid border, B/D hollow+dotted border). Orientation (which
+   way the triangle points) lives entirely in the glyph itself. */
+.arch-hotcues--B .arch-hotcue,
+.arch-hotcues--D .arch-hotcue {
+  border-style: dotted;
+}
+
 /* MPC-style velocity pad — raised 3D face, color-lit when cue is set */
 .arch-hotcue {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 1px;
   width: 34px;
   height: 34px;
   padding: 0;
@@ -1296,6 +1306,49 @@
   transition: box-shadow 60ms, filter 60ms, transform 40ms;
   position: relative;
   overflow: hidden;
+}
+
+/* Bank glyph — inherits currentColor, so it automatically follows the same
+   ghost (empty) → var(--cue-color) (occupied) swap the pad's own `color`
+   already drives via .has-cue below. No separate empty/occupied styling. */
+.arch-hotcue-glyph {
+  color: inherit;
+  flex-shrink: 0;
+}
+
+.arch-hotcue-label {
+  font-size: 7px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  max-width: 30px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Discoverability hint — covers the pad on hover rather than extending
+   outside its bounds (the pad's own overflow:hidden, needed for the
+   .has-cue glow overlay below, would clip anything positioned outside it). */
+.arch-hotcue-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  background: rgba(0, 0, 0, 0.82);
+  color: inherit;
+  font-size: 6px;
+  line-height: 1.2;
+  letter-spacing: 0.03em;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 100ms;
+  pointer-events: none;
+}
+
+.arch-hotcue:hover .arch-hotcue-hint {
+  opacity: 1;
 }
 
 .arch-hotcue:hover {
@@ -1342,9 +1395,9 @@
 }
 
 /* Explicit clear affordance — always visible on an occupied pad (not
-   hover-gated) so it's discoverable without already knowing the
-   double-click-twice gesture exists. Works on all 4 banks, including D
-   where double-click is claimed by rename. */
+   hover-gated). Works on all 4 banks; double-click on every bank now opens
+   the rename editor instead (the old double-click-twice clear-confirm
+   gesture on A/B/C was dropped as redundant with this). */
 .arch-hotcue-clear {
   position: absolute;
   top: 1px;
@@ -1364,25 +1417,6 @@
   color: #ff4444;
 }
 
-/* Clear-confirm state: pulsing red border, 3s auto-cancel */
-.arch-hotcue.clearing {
-  box-shadow:
-    inset 0 -2px 0 rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 0 0 1.5px oklch(0.62 0.22 25);
-  animation: arch-cue-clear-pulse 0.5s ease-in-out infinite alternate;
-}
-
-@keyframes arch-cue-clear-pulse {
-  from {
-    box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.55), 0 0 0 1.5px oklch(0.62 0.22 25 / 0.4);
-  }
-
-  to {
-    box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.55), 0 0 0 1.5px oklch(0.62 0.22 25 / 0.9);
-  }
-}
-
 /* Keyboard shortcut legend — toggled by ? key */
 .arch-shortcut-legend {
   font-family: 'JetBrains Mono', monospace;
@@ -1396,7 +1430,7 @@
   user-select: none;
 }
 
-/* D-bank editable label input — appears on double-click */
+/* Editable label input — appears on double-click, any bank */
 .arch-hotcue-input {
   position: absolute;
   inset: 0;
@@ -1451,6 +1485,24 @@
   opacity: 0.25;
   cursor: not-allowed;
   pointer-events: none;
+}
+
+.arch-cue-sort-btn {
+  background: transparent;
+  border: 1px solid rgba(var(--arch-accent-rgb), 0.12);
+  color: rgba(var(--arch-muted-rgb), 0.42);
+  font-family: var(--font-ui, 'Chakra Petch', sans-serif);
+  font-size: 0.48rem;
+  letter-spacing: 0.1em;
+  padding: 2px 4px;
+  cursor: pointer;
+  transition: color 80ms, border-color 80ms, background 80ms;
+}
+
+.arch-cue-sort-btn.active {
+  border-color: rgba(var(--arch-accent-rgb), 0.45);
+  color: var(--arch-accent);
+  background: rgba(var(--arch-accent-rgb), 0.06);
 }
 
 .arch-loop-controls {

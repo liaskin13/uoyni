@@ -78,9 +78,14 @@ elsewhere in this file for why that was harder than it should've been.
 
 ---
 
-### Confidence meter — companion to T9's badge (deferred, not built)
+### ~~Confidence meter — companion to T9's badge (T9B)~~ — CANCELLED 2026-08-19
 
-**Priority:** Low — revisit only if evidence says the badge alone isn't enough.
+**Status: CANCELLED, not deferred.** L: "T9B WAS CANCELLED ugly & stupid like
+the energy meter was" — same 2026-06-03 vibe-meter failure pattern (see
+`feedback_design_without_approval` in memory). Do not resurrect this idea
+without a fresh design conversation; it isn't a "pick up later" item.
+
+**Priority (historical):** Low — revisit only if evidence says the badge alone isn't enough.
 **Blocked by:** Nothing technical. Blocked by lack of a real reason to build it yet.
 
 **What:** During PR3's `/plan-eng-review` (2026-08-15), T9 (BPM confidence
