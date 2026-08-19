@@ -64,4 +64,4 @@ Nothing that looks like AI made it.
 
 ## Accessibility & Inclusion
 
-High contrast is a natural outcome of the achromatic brutalist aesthetic. WCAG AA minimum for all text surfaces. Reduced motion support via `prefers-reduced-motion` — animations are additive, not structural. No color-only information encoding: cue markers use both color and position to distinguish banks.
+High contrast is a natural outcome of the achromatic brutalist aesthetic. WCAG AA minimum for all text surfaces. Reduced motion support via `prefers-reduced-motion` — animations are additive, not structural. No color-only information encoding: hot-cue banks are distinguished by shape (triangle orientation and solid/hollow fill), not color — color is reserved for each individual cue's own identity.

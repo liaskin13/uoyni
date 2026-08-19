@@ -326,16 +326,21 @@ not yet investigated. Screenshots: `.gstack/qa-reports/screenshots/history-reche
 
 ---
 
-### Test suite — Vitest baseline
+### ~~Test suite — Vitest baseline~~ — DONE, stale (never marked), closed 2026-08-19
 
-**Priority:** High
-**Blocked by:** nothing (can start any time after Phase 10)
+**Status: done, and long since exceeded.** This was a Phase 10 artifact
+describing a zero-test starting point that stopped being true many sessions
+ago — never updated to reflect it. All three minimum-viable items below are
+covered, plus far more: `src/lib/__tests__/tracks.test.js` covers
+`uploadTrack()`/`getAudioUrl()`/`fetchVaultTracks()`,
+`src/state/__tests__/dispatchCommand.test.js` covers `dispatchCommand()`,
+`src/components/__tests__/UploadModal.test.js` covers format/size
+validation. The suite as a whole is at 661 passing tests across 41 files
+(`npx vitest run`, verified 2026-08-19) — Vitest + Testing Library, no
+Playwright/E2E unit-level gap remains (E2E itself is tracked separately,
+see "Isolated E2E test backend").
 
-Phase 10 ships with zero automated tests. Build verification is the only gate. This
-is acceptable for Phase 10 (D+L internal only), but any refactoring after this
-point is invisible until it visually breaks.
-
-Minimum viable test baseline:
+Original scope (historical, all satisfied):
 
 - `lib/tracks.js` — unit tests for `uploadTrack()`, `getAudioUrl()` (now async),
   `fetchVaultTracks()` error path (should return [], not throw)
@@ -343,9 +348,6 @@ Minimum viable test baseline:
   caller, `loadVaultTracks()` side effect from CMD.UPLOAD_TRACK handler
 - `src/components/UploadModal.jsx` — format validation (WAV/AIFF/MP3 accepted,
   others rejected), size validation (>200MB rejected)
-
-Set up: `bun add -d vitest @testing-library/react`. No Playwright/E2E yet — unit tests
-first.
 
 ---
 

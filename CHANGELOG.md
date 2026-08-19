@@ -2,6 +2,69 @@
 
 All notable changes to Pleasant Soul Collective will be documented in this file.
 
+## [1.5.0.0] - 2026-08-19
+
+### Added
+
+- **Gapless loop engine** — loops now hand off to a native, sample-accurate
+  Web Audio loop instead of a JS-timed seek: zero audible click at the loop
+  boundary, and zero-crossing edges are snapped as a matched pair (not
+  independently) so the loop length doesn't drift cycle over cycle. Only
+  decodes the loop-region slice, never the whole track, so it works on D's
+  800MB+ WAV mixes the same as a 3-minute file
+- **Chronological hot-cue auto-sort** — the 32 hot-cue pads (4 banks × 8) can
+  now auto-arrange themselves by track position instead of staying wherever
+  you first clicked, matching Serato's own "sort cues chronologically"
+  option. Naming a cue pins it in place so your memorized structural cues
+  (drop, breakdown) don't drift when new ones get added around them. Off by
+  a click if you'd rather keep the old fixed-pad behavior
+- **Bank identity glyphs** — hot-cue pads show a triangle instead of a bare
+  number: which way it points and whether it's solid or hollow tells you
+  which of the 4 banks you're looking at at a glance, and it lights up in
+  the cue's own color once set. Every bank can now be renamed by
+  double-clicking it, not just one of the four
+- **Smart Crates, for real** — the toggle existed for a while but did
+  nothing; it now actually sorts BPM/key-compatible tracks to the top of
+  whatever list you're browsing and tags them, so building a compatible set
+  around whatever's loaded is one click instead of manual scanning
+- Guest sessions now persist which access code redeemed them and quietly
+  re-check that code in the background, so a revoked or expired code signs
+  a guest out instead of a stale saved session staying valid forever
+- A visible `?` button for the keyboard-shortcut legend, a "type HELP" hint
+  in the console search box, and a beatgrid discoverability hint on the
+  waveform itself — closing a console-wide sweep of controls and features
+  that worked fine but had no way to find out they existed
+- Individual hot-cue clearing (an `×` on any occupied pad) on all 4 banks,
+  and a confirm step on ACCESS CODES REVOKE (previously instant/irreversible
+  with no warning, the only destructive console action without one)
+
+### Fixed
+
+- Loop playback had an audible gap at the loop-out point on every cycle —
+  first tightened by polling playback position at animation-frame
+  resolution instead of the browser's much coarser timing event, then
+  fully closed by the native gapless engine above
+- The `0000` public guest-access code was briefly broken in production by
+  an unrelated session-persistence change that mistook a stale code
+  comment for a real feature flag — caught and fixed the same day it
+  shipped, before it affected real onboarding for long
+- HISTORY track-list filter was silently wired to the wrong internal
+  setting and never actually filtered anything
+- Recurring Codespace commit-signing failures (`gpg failed to sign the
+  data... 403 | Author is invalid`), bypassed for weeks — root cause found:
+  the Codespace's signing helper requires your git identity to match your
+  GitHub profile's display name, not your username
+- Console idle-state text contrast raised to a real legibility floor across
+  ~15 button classes and the entire track-list content column — some
+  content was as low as 1.7:1 against its background, well under
+  accessibility guidelines
+
+### Changed
+
+- T9B, a proposed always-on confidence meter, was designed and then
+  cancelled — same call as an earlier ambient-meter idea that didn't earn
+  its place next to information already shown as precise text
+
 ## [1.4.0.0] - 2026-08-15
 
 ### Added

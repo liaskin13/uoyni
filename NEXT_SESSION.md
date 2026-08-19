@@ -1,12 +1,49 @@
 # Next Session — Resume Here
 
-**Last updated:** 2026-08-19 (gapless loop engine shipped to production,
-guest-session persistence reviewed + a live production regression fixed,
-context-save/learn closeout)
+**Last updated:** 2026-08-19 (later same day — Codespace GPG signing bug
+root-caused and fixed for real, hot-cue chronological auto-sort + triangle
+bank glyphs shipped, T9B cancelled, `0000` guest-code memory corrected)
 
 ## Status
 
-**2026-08-19 — two pieces of work, both live in production:**
+**2026-08-19 (later same day) — three more pieces of work, all live:**
+
+1. **Codespace GPG-signing 403 — RESOLVED, not just another bypass.** Root
+   cause: `gh-gpgsign` requires `git config user.name` to match the **GitHub
+   profile's display name** (`gh api user --jq .name`), not the login. This
+   Codespace's `/etc/gitconfig` had the stale login value (`liaskin13`) while
+   the profile name is `"lisa marie"` — confirmed by reproducing the 403 both
+   ways. Fixed via a repo-level `git config user.name` override (commit
+   `46d2beb`). The repo-rename theory from earlier today was reasonable but
+   wrong — `GITHUB_REPOSITORY`/`gh auth status` already reflected the rename
+   correctly. Full writeup in `tasks/lessons.md` and `TODOS.md` (marked
+   RESOLVED). **Do not re-open this investigation** — if the 403 recurs in a
+   different repo/Codespace, diff `git config user.name` against
+   `gh api user --jq .name` first.
+2. **Hot-cue chronological auto-sort + triangle bank glyphs** (commit
+   `a8587ef`, deployed to production, confirmed via `wrangler pages
+   deployment list` + live `curl uoyni.com` 200). The 32 pads (4 banks × 8)
+   now form one continuous chronological sequence by default (toggle,
+   `SORT ON`/`OFF` next to `CLR`) instead of 4 fixed-slot containers —
+   researched Serato's real "Sort Cues and Loops Chronologically" preference
+   before building. Labeling a cue pins it (excluded from auto-sort, frozen
+   pad). Pads now show a triangle instead of a number (orientation = A/B vs
+   C/D, solid/hollow fill = which bank in the pair) and every bank renames on
+   double-click, not just D. New `src/lib/hotCueLayout.js` (pure,
+   unit-tested, 10 tests) is the single source of truth for pad position; see
+   DESIGN.md's Hot Cues section for the full spec. **Not yet verified by
+   D** — only checked live by L/Claude in a browser session this turn.
+3. **T9B (confidence-meter companion) — CANCELLED, not deferred.** L: "T9B
+   WAS CANCELLED ugly & stupid like the energy meter was." Don't resurrect
+   without a fresh design conversation. TODOS.md updated to match.
+
+Also: the `feedback_0000_is_permanent_feature` memory from earlier today was
+**wrong and has been corrected** — `0000` is test-only scaffolding per L,
+scheduled for removal before public launch, not a permanent feature. The
+code comments in `worker/upload-worker.js`/`RequestAccessModal.jsx` still say
+"permanent" — stale, worth cleaning up whenever `0000` itself is removed.
+
+**2026-08-19 (earlier same day) — two pieces of work, both live in production:**
 
 1. **Gapless loop engine** (commits `0a7971f` + `2cb40cd`) — merged to
    `main`, deployed to **production** (not just a preview — confirmed via
@@ -85,9 +122,10 @@ environment-specific until that lead has actually been tested.
   overrides DESIGN.md's prior "confidence badge always neutral" rule, by L's
   explicit direction. Live in DESIGN.md's Decisions Log — don't re-read the
   rule as if it still says neutral-only.
-- **T9b (a companion always-on meter) was designed, then cut** — don't
-  rebuild it without a real reason. TODOS.md: "revisit only if the badge
-  alone proves too slow to scan."
+- **T9b (a companion always-on meter) was designed, cut, then formally
+  CANCELLED 2026-08-19** ("ugly & stupid like the energy meter was" — L).
+  Don't rebuild it without a fresh design conversation — this isn't a
+  "revisit later" item anymore.
 - **T12 (cross-instrument pulse) has NOT shipped** — no commit found for it
   as of 2026-08-16. Still its own isolated PR, still the only item with real
   regression risk (touches shared SA/WF/VU rendering), still includes a
@@ -96,21 +134,21 @@ environment-specific until that lead has actually been tested.
 
 ## Start here next session
 
-1. **GPG signing root cause** (TODOS.md) — L has a real, specific lead now
-   (the `psoulc`→`uoyni` repo rename + author name change, see Status
-   above). Start here — concrete next steps are already written out in
-   TODOS.md's entry, don't re-diagnose from scratch.
-2. **D's listening pass on the gapless loop engine** — the real acceptance
-   test for this session's headline fix, still hasn't happened. Not
-   something to build, just something to chase down/confirm.
+1. **D's listening pass on the gapless loop engine** — the real acceptance
+   test for that fix, still hasn't happened. Not something to build, just
+   something to chase down/confirm.
+2. **D's feedback on the hot-cue redesign** (chronological auto-sort +
+   triangle bank glyphs, shipped 2026-08-19) — same situation, only checked
+   live by L/Claude so far, not by D actually using it.
 3. **T12 (cross-instrument pulse)** — the one piece of PR3 still unshipped.
 4. **GOD MODE MOBILE guest-flow redesign** — L said directly "i have to do a
    full design redo on the entire guest flow." Not scoped yet (see section
    below for context to bring into that).
-5. **Octave-correction UX** (new TODOS.md entry, 2026-08-16) — needs a small
+5. **Octave-correction UX** (TODOS.md entry, 2026-08-16) — needs a small
    design decision (where does the deck-header version of the control live)
    before building.
-6. Everything else: read `TODOS.md` for the full ranked list.
+6. Everything else: read `TODOS.md` for the full ranked list. (GPG signing
+   is now RESOLVED — don't re-add it here or re-diagnose it.)
 
 ---
 
@@ -153,8 +191,8 @@ After that (unchanged from before, still not started):
    2026-08-15**, made actually discoverable 2026-08-16. See Status above.
 5. Everything else tracked in `TODOS.md` — read that file for the full
    ranked list. HISTORY filter bug and the hot-cue-clear item are now
-   closed; the Codespace GPG-signing bug is still open (Medium priority,
-   the "try a restart" lead is now ruled out — see Status above).
+   closed; the Codespace GPG-signing bug is now RESOLVED too (2026-08-19,
+   see Status above) — don't treat it as open.
 
 ---
 
