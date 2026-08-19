@@ -7,8 +7,43 @@ and enough context to pick it up cold.
 
 ### CONF % badge + octave-correction are scope-mismatched with D's actual catalog
 
-**Priority:** Medium — the feature isn't broken, it's aimed at a problem D's
-material doesn't have.
+**Priority: HIGH as of 2026-08-19 — L flagged this as top priority for next
+session** ("THIS IS PPRIORITY NOW"), after checking the finding against D
+directly and confirming it matches his own lived sense of why funk/soul
+tracks read lower confidence. Was Medium; elevated.
+
+**Research confirms the root cause is real, not a guess (2026-08-19,
+`/context-save` session):**
+
+- **Neither Serato nor rekordbox shows a numeric confidence % to the DJ at
+  all.** Serato just surfaces a (sometimes octave-wrong) BPM number plus a
+  manual range override. Rekordbox's actual answer to variable/live-feel
+  material is a **different analysis mode entirely** — "Dynamic" analysis,
+  explicitly documented as "ideal for tracks with fluctuating tempos — live
+  recordings, **classic funk, disco**, or rock," placing multiple beat
+  markers instead of forcing one tempo ([Lexicon DJ writeup](https://www.lexicondj.com/blog/understanding-rekordbox-beatgrid-analysis)).
+  That is architecturally the same idea as this codebase's own
+  `detectTempoSegments`/multi-point beatgrid — which already exists, unused
+  for this purpose.
+- **Why funk/soul specifically scores lower is backed by real music-cognition
+  research, not a detector flaw.** Funk/soul performance relies on
+  *microtiming* — small, deliberate, non-quantized timing deviations between
+  instruments, the actual mechanism of "groove" / "participatory discrepancy"
+  ([ZGMTH: Microtiming in Early Funk](https://www.gmth.de/zeitschrift/artikel/1224.aspx);
+  [Microtiming in Swing and Funk — PMC](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4542135/)).
+  The confidence score (`rawCorr / energy` in `estimateTempoPeriod`,
+  `beatDetector.js:57-97`) mathematically measures how perfectly the onset
+  envelope repeats at one fixed lag — i.e. it measures the **absence** of
+  that microtiming. A rigidly-quantized EDM kick autocorrelates near-perfectly
+  by design; a live funk groove autocorrelates worse **because the genre is
+  deliberately not rigidly periodic**, not because detection failed. D's own
+  explanation to L of why his confidence reads lower on some genres matches
+  this exactly.
+- **Conclusion: don't try to raise confidence on funk/soul material** — that
+  would mean quantizing away the actual groove. The right move is surfacing
+  the multi-point (`detectTempoSegments`) system that already exists for
+  exactly this case, the same way rekordbox's Dynamic mode does, instead of
+  patching the single-tempo CONF badge to pretend funk has one BPM.
 
 **What:** Dug into why L never sees the CONF badge. Two independent causes,
 both confirmed against real code:

@@ -1,9 +1,31 @@
 # Next Session — Resume Here
 
-**Last updated:** 2026-08-19 (evening — WF Deck header/meter/beat-indicator
-spacing tightened + new BEAT toggle, shipped and deployed to production)
+**Last updated:** 2026-08-19 (later evening — CONF % / funk-soul confidence
+finding, L's explicit top priority for next session)
 
 ## Status
+
+## ⚑ TOP PRIORITY — CONF % badge scope mismatch (research-confirmed, not just theory)
+
+L confirmed this against D directly — D's own explanation of why his
+confidence reads lower on some genres matches the research exactly. Full
+writeup in `TODOS.md`'s "CONF % badge + octave-correction are scope-mismatched
+with D's actual catalog" entry (now marked HIGH priority) — **read that
+entry in full before doing anything else this session.**
+
+Short version: the confidence score mathematically measures how perfectly
+periodic a track's rhythm is (autocorrelation strength). Funk/soul music
+deliberately isn't rigidly periodic — that's *microtiming*/"groove," a real,
+researched phenomenon, not noise. Lower confidence on funk/soul is the
+detector correctly measuring less rigid timing, not a bug. Rekordbox's real
+answer to this exact problem (funk/disco/live material) is a completely
+different mode — "Dynamic" multi-point analysis instead of one BPM number —
+which maps directly onto this codebase's own already-shipped but unsurfaced
+`detectTempoSegments`/beatgrid system. Don't try to raise confidence on
+funk/soul tracks; that would mean quantizing away the actual groove. The
+real next step is likely surfacing the multi-point system instead of
+patching the single-tempo badge — but that's a product decision with D/L,
+not yet made.
 
 **2026-08-19 (evening) — WF Deck spacing tightened, shipped + deployed:**
 
