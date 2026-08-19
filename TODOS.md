@@ -667,7 +667,35 @@ cross-vault listing, consider requiring auth for the whole route instead.
 
 ---
 
-### Investigate root cause of recurring Codespace commit-signing failures
+### ~~Investigate root cause of recurring Codespace commit-signing failures~~ — RESOLVED 2026-08-19
+
+**Status: RESOLVED.** Root cause: GitHub Codespaces' `gh-gpgsign` signing
+helper requires `git config user.name` to match the **full/display name on
+the GitHub profile** (documented at
+`docs.github.com/en/codespaces/troubleshooting/troubleshooting-gpg-verification-for-github-codespaces`,
+"conflicting git configuration" section). This Codespace's system-level
+`/etc/gitconfig` had `user.name=liaskin13` (the login), but the GitHub
+profile's `name` field is `"lisa marie"` (`gh api user --jq .name`) — a real
+mismatch, not L's repo-rename theory (that theory was reasonable but wrong;
+`GITHUB_REPOSITORY` and `gh auth status` both already reflected the renamed
+repo correctly, ruling out a stale App grant). Confirmed by direct
+reproduction: `git commit --allow-empty -S` failed with the exact `403 |
+Author is invalid` error under `user.name=liaskin13`, then succeeded under
+`user.name="lisa marie"` — both outcomes observed directly, not inferred.
+
+**Fix applied:** `git config user.name "lisa marie"` at the repo level
+(`/workspaces/psoulc/.git/config`), which overrides the stale system value.
+Survives reconnects and container rebuilds (the repo directory persists).
+Does not propagate to a fresh Codespace/clone — if this recurs elsewhere,
+diff `git config user.name` against `gh api user --jq .name` first.
+
+Full writeup in `tasks/lessons.md` (the "ROOT CAUSE FOUND 2026-08-19" entry,
+which also corrects an earlier wrong lesson that told future sessions not to
+check git identity for this exact error).
+
+---
+<details>
+<summary>Original entry (kept for history)</summary>
 
 **Priority:** Medium — bumped from Low. Recurred yet again 2026-08-14 (GOD MODE
 MOBILE commit `1c30a70`), and this time L expected it to already be fixed
@@ -731,6 +759,8 @@ actually testing this lead first.
 
 **Depends on:** Nothing technical — needs someone to actually reproduce and
 diagnose it instead of bypassing on sight.
+
+</details>
 
 ---
 
