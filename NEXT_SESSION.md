@@ -1,12 +1,40 @@
 # Next Session — Resume Here
 
-**Last updated:** 2026-08-19 (later same day — Codespace GPG signing bug
-root-caused and fixed for real, hot-cue chronological auto-sort + triangle
-bank glyphs shipped, T9B cancelled, `0000` guest-code memory corrected)
+**Last updated:** 2026-08-19 (evening — WF Deck header/meter/beat-indicator
+spacing tightened + new BEAT toggle, shipped and deployed to production)
 
 ## Status
 
-**2026-08-19 (later same day) — three more pieces of work, all live:**
+**2026-08-19 (evening) — WF Deck spacing tightened, shipped + deployed:**
+
+Commit `1e18132`, live at uoyni.com (verified via `wrangler pages deployment
+list` + `curl` 200, not inferred). Full detail in `TODOS.md`'s "WF Deck
+header/meter/beat-indicator spacing tightened" entry — read it before
+touching the deck header, meters, or beat-indicator area again.
+
+Short version: header/meter/beat-indicator spacing reduced to on-scale
+values, beat indicator resized 36→24px and now collapses to 0px by default
+(new `BEAT` toggle in the BPM row controls it, decoupled from waveform
+hover). Went through `/plan-design-review` + `/plan-eng-review` (with an
+outside-voice subagent) before writing code — both caught real bugs
+pre-implementation (WCAG contrast failure, a savings-math error, a
+toggle-redraw gap, a margin-collapse gap, a disabled-state CSS gap, 5 e2e
+tests that would have broken). All folded in before shipping.
+
+**A live button/pad-border visual-language unification was tried (real CSS
+injected into the running console, screenshotted, published as a comparison
+page) and rejected outright by L** — "it looks worse. period." **Do not
+resurrect this direction without a fresh design conversation.**
+
+**Not yet verified by D.**
+
+**Open follow-up, not yet confirmed still wanted:** a console-wide
+`aria-pressed` audit (SMART button + 6 settings-panel toggles missing it) —
+surfaced during the design review, L said "build it now" at one point but
+it didn't end up in the final shipped scope. See TODOS.md entry — ask L
+before picking it up.
+
+**2026-08-19 (earlier same day) — three more pieces of work, all live:**
 
 1. **Codespace GPG-signing 403 — RESOLVED, not just another bypass.** Root
    cause: `gh-gpgsign` requires `git config user.name` to match the **GitHub

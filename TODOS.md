@@ -5,6 +5,68 @@ and enough context to pick it up cold.
 
 ---
 
+### ~~WF Deck header/meter/beat-indicator spacing tightened + BEAT toggle~~ — SHIPPED + DEPLOYED 2026-08-19
+
+**What shipped (commit `1e18132`, deployed to production, verified via
+`wrangler pages deployment list` + live `curl uoyni.com` 200):** deck header
+margin/padding, meter-row margin-top, and the onset-envelope (beat
+indicator) canvas all reduced to on-scale values per DESIGN.md's 4px grid.
+Beat indicator resized 36→24px — it was violating "must be under the 32px
+overview strip" (was bigger than the full-length waveform, backwards). It
+now collapses to 0px by default instead of permanently reserving space, via
+a new `BEAT` toggle in the BPM row (reuses `.arch-rail`'s existing collapse/
+transition recipe) — decoupled from waveform hover, which previously both
+revealed the indicator AND armed `↑`/`↓` zoom off the same gesture.
+`tests/e2e/envelopeRow.spec.js`'s 5 tests updated for the new toggle-gated
+visibility.
+
+**Process:** went through `/plan-design-review` (7/10→9/10, 10 decisions)
+and `/plan-eng-review` incl. an outside-voice subagent pass (7 findings, all
+resolved) before any code was written. Both caught real, verified bugs
+pre-implementation — see `project_wf_deck_spacing_shipped_20260819` memory
+for the full list (WCAG contrast failure, savings-math error, toggle-redraw
+gap, margin-collapse gap, disabled-state CSS gap, the 5 e2e tests).
+
+**Explicitly cut, not deferred:** a button/pad-border visual-language
+unification across transport/hot-cue/vault-tab buttons was live-mocked on
+the real console and rejected outright by L ("it looks worse. period.") —
+do not resurrect without a fresh design conversation. Cue-cluster spacing,
+library-header-row styling, and VU/spectrum width-gap changes were cut for
+the same reason (tied to the rejected direction) or were simply out of
+scope ("you said you were looking at the WIDTHS which were not my
+concern").
+
+**Not yet verified by D** — only checked by L/Claude this session.
+
+---
+
+### Console-wide `aria-pressed` audit — surfaced, not built
+
+**Priority:** Low
+**Blocked by:** Nothing technical.
+
+**What:** During the WF-deck design review (2026-08-19), grep + direct code
+read confirmed 7 toggle buttons in `ArchitectConsole.jsx` lack
+`aria-pressed`: the `SMART` library-toolbar toggle (`.arch-browser-btn`,
+~jsx:3696 — most severe, its label is static "SMART" so screen readers get
+no state signal at all) and 6 `.arch-settings-toggle` buttons (Track Color
+Rows, Quantize, Auto Loop Default, Smart Crates' settings-panel twin, Track
+History, per-vault visibility — these six have less severe impact since
+their button text itself flips ON/OFF or ENABLED/DISABLED).
+
+**Why deferred:** L initially said "build it now" when asked whether to log
+it as a TODO, then the session's scope got trimmed hard back to just the 5
+height/size-only deck items — this audit did not end up in what actually
+shipped. Confirm with L whether it's still wanted before picking it up; it
+may have been superseded by the scope trim rather than genuinely still
+wanted.
+
+**Fix pattern:** one-line `aria-pressed={<existing state variable>}` per
+button, same pattern already correct on `SORT ON`, the cue bank selector,
+PLAY, and two others already in the file — no new pattern needed.
+
+---
+
 ### ~~Full sample-accurate gapless loop engine~~ — BUILT 2026-08-16, pending D's listening pass
 
 **What shipped:** the real fix for D's "a tiny break... not continuous"
