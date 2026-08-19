@@ -5,6 +5,53 @@ and enough context to pick it up cold.
 
 ---
 
+### CONF % badge + octave-correction are scope-mismatched with D's actual catalog
+
+**Priority:** Medium — the feature isn't broken, it's aimed at a problem D's
+material doesn't have.
+
+**What:** Dug into why L never sees the CONF badge. Two independent causes,
+both confirmed against real code:
+
+1. **Display suppression.** `cleanBpm()` (`ArchitectConsole.jsx:56-59`) treats
+   any non-empty `bpm_display` as "already known" — it doesn't distinguish a
+   single BPM from a manually-entered range like "60-80" (which is exactly
+   what's in D's real library rows: EIGHTYSIXTY = "60-80", another = "73-96").
+   The badge's visibility gate (`!cleanBpm(bpm_display) && !bpm && detected_bpm
+   != null`, `ArchitectConsole.jsx:2998-3002` and `:4122-4126`) is permanently
+   false the moment a range exists. Same gate hides the octave-correction
+   buttons.
+2. **Design-intent mismatch, not just a display bug.** DESIGN.md line 342
+   states the octave-correction control's actual purpose: "Corrects the known
+   DP-beat-tracker octave-ambiguity failure mode (90 vs 180 BPM reading
+   equally strong)." That premise assumes a track has **one real tempo** the
+   detector might report at 2x/0.5x. D's mixes span wide ranges by nature —
+   there's no single "real tempo" for the octave-correction UI to be
+   correcting toward. The feature was built for a fixed-tempo-track use case;
+   D's catalog is the opposite of that.
+
+**What's NOT dead:** `detectTempoSegments` (`beatDetector.js:290`, wired via
+`waveformAnalyzer.js:600` → `handleBeatGridPointsChange`,
+`ArchitectConsole.jsx:1641-1642`) is a separate, already-shipped,
+variable-tempo-aware system — multi-point beatgrid feeding loop-length
+quantize (DESIGN.md's "Beatgrid & Quantize" section, built to meet-or-beat
+rekordbox/Serato). This is architecturally the right tool for D's material.
+Unverified: whether it's actually populating real segment data for his
+tracks, and its own confidence (`detected_downbeat_confidence`) has zero UI
+surface anywhere either — same transparency gap as the CONF badge, different
+subsystem, never checked.
+
+**Why deferred:** needs a product decision with D/L, not just a code fix —
+does the CONF badge get a range-aware variant, does D's catalog just not
+need this feature at all, or should the segment-based beatgrid confidence
+get its own visible indicator instead? Real options, not an obvious pick.
+
+**Depends on:** verifying whether `detectTempoSegments` actually fires on
+D's real (uploaded, not fixture) tracks before deciding anything — currently
+unverified.
+
+---
+
 ### ~~WF Deck header/meter/beat-indicator spacing tightened + BEAT toggle~~ — SHIPPED + DEPLOYED 2026-08-19
 
 **What shipped (commit `1e18132`, deployed to production, verified via
