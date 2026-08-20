@@ -5,6 +5,7 @@ import {
   snapToGridBeat,
   clampAnchorTime,
   hitTestAnchor,
+  zoneSummary,
 } from "../beatGrid";
 
 describe("buildGridSegments — regression parity (single-segment path)", () => {
@@ -127,6 +128,31 @@ describe("hitTestAnchor", () => {
   it("returns the closer anchor when two are within tolerance", () => {
     const close = [{ time: 10, bpm: 120 }, { time: 10.4, bpm: 125 }];
     expect(hitTestAnchor(close, 10.1, 1)).toBe(0);
+  });
+});
+
+describe("zoneSummary — ZONES badge data", () => {
+  it("returns null for no points", () => {
+    expect(zoneSummary(null)).toBeNull();
+    expect(zoneSummary([])).toBeNull();
+  });
+
+  it("returns null for exactly one anchor (one flat tempo, not a zone)", () => {
+    expect(zoneSummary([{ time: 0, bpm: 120 }])).toBeNull();
+  });
+
+  it("summarizes zone count and BPM range for 2+ anchors", () => {
+    const points = [{ time: 0, bpm: 96 }, { time: 30, bpm: 142 }, { time: 60, bpm: 110 }];
+    expect(zoneSummary(points)).toEqual({ zoneCount: 3, minBpm: 96, maxBpm: 142 });
+  });
+
+  it("filters out malformed points before counting", () => {
+    const points = [{ time: 0, bpm: 100 }, { time: 10, bpm: NaN }, { time: 20, bpm: 130 }];
+    expect(zoneSummary(points)).toEqual({ zoneCount: 2, minBpm: 100, maxBpm: 130 });
+  });
+
+  it("returns null when fewer than 2 points survive filtering", () => {
+    expect(zoneSummary([{ time: 0, bpm: 100 }, { time: 10, bpm: 0 }])).toBeNull();
   });
 });
 

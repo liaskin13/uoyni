@@ -20,6 +20,19 @@ const SIXTEENTHS_PER_BEAT = 4;
 const STEPS_PER_BAR = BEATS_PER_BAR * SIXTEENTHS_PER_BEAT; // 16th-note resolution
 export const FRAME_RATE = 50; // must match BEAT_DETECTOR_FRAME_RATE (waveformAnalyzer.js) — exported so callers don't redeclare the same literal
 
+// Deterministic PRNG (mulberry32) — jittered fixtures must be reproducible
+// across test runs, not seeded off real randomness. Same seed always
+// produces the same jitter sequence.
+function mulberry32(seed) {
+  let state = seed | 0;
+  return function () {
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 /**
  * @param {object} spec
  * @param {number} spec.bpm nominal tempo — NOT the ground truth, see actualBpm below
@@ -28,6 +41,16 @@ export const FRAME_RATE = 50; // must match BEAT_DETECTOR_FRAME_RATE (waveformAn
  * @param {number[]} spec.midPattern
  * @param {number[]} spec.highPattern
  * @param {number} [spec.noiseFloor]
+ * @param {number} [spec.jitterFrac] fraction of one 16th-note step (0-1) each
+ *   hit may shift earlier/later, simulating microtiming/groove — real,
+ *   deliberate, non-quantized timing deviation within a STABLE tempo, not
+ *   detection noise. 0 (default) reproduces today's byte-identical
+ *   quantized-grid placement — every existing archetype/test is unaffected.
+ *   The jitter offset is clamped to stay inside the hit's own step window,
+ *   so pattern identity (which step a hit belongs to) is never disturbed —
+ *   only its exact frame within that window.
+ * @param {number} [spec.jitterSeed] mulberry32 seed — same seed always
+ *   produces the same jitter sequence (default 1).
  * @returns {{bars: {bass:number,mid:number,high:number,peak:number}[], actualBpm: number, stepFrames: number}}
  *   actualBpm is the GROUND TRUTH after frame-quantization (16th-note duration
  *   must round to an integer number of frames), not the nominal input bpm —
@@ -41,23 +64,44 @@ export function syntheticGenreBars({
   midPattern,
   highPattern,
   noiseFloor = 0.02,
+  jitterFrac = 0,
+  jitterSeed = 1,
 }) {
   const stepFrames = Math.max(1, Math.round((60 / bpm / SIXTEENTHS_PER_BEAT) * FRAME_RATE));
   const actualBpm = (60 * FRAME_RATE) / (SIXTEENTHS_PER_BEAT * stepFrames);
   const totalFrames = Math.round(durationSec * FRAME_RATE);
-  const bars = [];
+  const rand = mulberry32(jitterSeed);
+  const maxJitterFrames = Math.floor(jitterFrac * stepFrames);
+
+  // Precompute, per step, which frame within its own window carries the
+  // hit — nominally the step-start frame, shifted by a bounded random
+  // offset. Clamped to [step-start, step-start + stepFrames - 1] so a hit
+  // never crosses into a neighboring step's window (that would change
+  // which pattern step it represents, not just when within it).
+  const numSteps = Math.ceil(totalFrames / stepFrames);
+  const hitFrameForStep = new Array(numSteps);
+  for (let s = 0; s < numSteps; s++) {
+    const nominal = s * stepFrames;
+    const jitter = maxJitterFrames > 0 ? Math.round((rand() * 2 - 1) * maxJitterFrames) : 0;
+    const lo = nominal;
+    const hi = Math.min(nominal + stepFrames - 1, totalFrames - 1);
+    hitFrameForStep[s] = Math.max(lo, Math.min(hi, nominal + jitter));
+  }
+
+  const bars = new Array(totalFrames);
   for (let i = 0; i < totalFrames; i++) {
-    const stepIdx = Math.floor(i / stepFrames) % STEPS_PER_BAR;
-    const isStepStart = i % stepFrames === 0;
-    const b = isStepStart ? (bassPattern[stepIdx] ?? 0) : 0;
-    const m = isStepStart ? (midPattern[stepIdx] ?? 0) : 0;
-    const h = isStepStart ? (highPattern[stepIdx] ?? 0) : 0;
-    bars.push({
+    const stepIdx = Math.floor(i / stepFrames);
+    const patternIdx = stepIdx % STEPS_PER_BAR;
+    const isHitFrame = i === hitFrameForStep[stepIdx];
+    const b = isHitFrame ? (bassPattern[patternIdx] ?? 0) : 0;
+    const m = isHitFrame ? (midPattern[patternIdx] ?? 0) : 0;
+    const h = isHitFrame ? (highPattern[patternIdx] ?? 0) : 0;
+    bars[i] = {
       bass: Math.max(b, noiseFloor),
       mid: Math.max(m, noiseFloor),
       high: Math.max(h, noiseFloor),
       peak: Math.max(b, m, h, noiseFloor),
-    });
+    };
   }
   return { bars, actualBpm, stepFrames };
 }
@@ -84,7 +128,7 @@ export function phaseWeightedBars({ bpm = 120, numBeats, downbeatPhase, strongBa
   return { bars, beatTimesSec };
 }
 
-// 5 archetypes, each a { bpm, durationSec, bassPattern, midPattern, highPattern }
+// 6 archetypes, each a { bpm, durationSec, bassPattern, midPattern, highPattern }
 // spec ready to pass straight into syntheticGenreBars(). Only breakbeat is
 // expected to land on a half-tempo octave rather than an exact match — see
 // GSTACK REVIEW REPORT / plan doc for why that's correct, not a bug.
@@ -134,5 +178,38 @@ export const GENRE_ARCHETYPES = {
     bassPattern: [1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0], // clave-like log-drum syncopation
     midPattern: new Array(16).fill(0),
     highPattern: [0.3, 0, 0.3, 0, 0.3, 0, 0.3, 0, 0.3, 0, 0.3, 0, 0.3, 0, 0.3, 0], // steady shaker
+  },
+  // Dynamic Tempo Analysis (CONF-badge/genre plan, Phase 3) — the executable
+  // proof of the whole plan's thesis: real microtiming/groove is NOT the
+  // same thing as tempo drift, and the detector should tell them apart, not
+  // conflate "the tempo isn't rigidly periodic" with "the tempo is
+  // changing." Same syncopated funk kick/backbeat-snare pattern as the
+  // hip-hop archetype's rhythmic character, but every hit gets a bounded
+  // random timing shift (jitterFrac 0.15, ~20ms at this bpm/frame-rate —
+  // real human "pushed"/"laid-back" feel, not a detection defect) instead
+  // of landing exactly on the quantized 16th-note grid.
+  //
+  // Empirically calibrated against the real onsetEnvelope/dpBeatTrack/
+  // detectTempoSegments exports (not guessed) — see the calibration sweep
+  // referenced in the plan doc: jitterFrac=0.15 was swept across 10 seeds
+  // (jitterSeed=1 locked in here), and at every seed: (a) detected BPM
+  // matched actualBpm exactly — jitter never shifted the resolved tempo,
+  // (b) detectTempoSegments returned null every time, including at jitter
+  // levels far beyond this one (proves "groove ≠ drift" isn't a fragile
+  // result), (c) dpBeatTrack confidence measurably dropped vs the SAME
+  // pattern with jitterFrac=0 (0.907 → 0.591, a direct ablation isolating
+  // jitter's effect from pattern complexity) and lands between the two
+  // OCTAVE_CONTROL_CONFIDENCE_THRESHOLD bars (0.35 dynamic / 0.6 static) —
+  // this is exactly the differentiating case: would have shown the
+  // octave-correct button under the old flat-0.6 rule, correctly stays
+  // hidden under the new dynamic-bucket rule.
+  funk: {
+    bpm: 100,
+    durationSec: 64,
+    bassPattern: [1, 0, 0, 0.3, 0, 0, 0.6, 0, 0, 0.3, 0, 0, 0, 0, 0.3, 0],
+    midPattern: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+    highPattern: [0.4, 0, 0.4, 0.2, 0.6, 0, 0.4, 0.2, 0.4, 0, 0.4, 0.2, 0.6, 0, 0.4, 0.2],
+    jitterFrac: 0.15,
+    jitterSeed: 1,
   },
 };

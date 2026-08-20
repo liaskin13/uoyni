@@ -49,7 +49,7 @@ test("shows PENDING VALIDATION rather than crashing when the artifact is missing
 
 test("COMMS VALIDATION topic opens correctly, same behavior as BEATGRID", async ({ page }) => {
   await loginToConsole(page, "D");
-  const search = page.getByPlaceholder("SEARCH VAULT");
+  const search = page.getByPlaceholder("SEARCH · OR TYPE HELP");
   await search.fill("VALIDATION");
   await expect(page.getByText("⏎ HELP")).toBeVisible();
   await search.press("Enter");

@@ -71,6 +71,12 @@ function validateGenre(name, spec) {
     bpmActual: Math.round(actualBpm * 100) / 100,
     bpmDetected: bpmResult.bpm,
     bpmPctErr: bpmPctErr == null ? null : Math.round(bpmPctErr * 100) / 100,
+    // dpBeatTrack's autocorrelation-strength confidence on the plain
+    // (non-drift) constant-tempo pass above — additive field so funk's
+    // lower-but-correct confidence (real microtiming lowers periodicity
+    // without being wrong) is visible in the Validation Suite panel both
+    // settings surfaces show, not just pass/fail.
+    confidence: Math.round(bpmResult.confidence * 1000) / 1000,
     transitionDeviationMs:
       transitionDeviationMs == null ? null : Math.round(transitionDeviationMs * 10) / 10,
     toleranceMs: Math.round(toleranceSec * 1000 * 10) / 10,

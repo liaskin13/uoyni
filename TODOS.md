@@ -5,9 +5,26 @@ and enough context to pick it up cold.
 
 ---
 
-### CONF % badge + octave-correction are scope-mismatched with D's actual catalog
+### ~~CONF % badge + octave-correction are scope-mismatched with D's actual catalog~~ — RESOLVED 2026-08-20 (Dynamic Tempo Analysis)
 
-**Priority: HIGH as of 2026-08-19 — L flagged this as top priority for next
+**Status: Built.** The genre/bucket system below is the direct implementation
+of this entry's own conclusion (surface `detectTempoSegments` via a real
+ZONES badge, add a genre-aware threshold instead of patching the flat
+single-tempo CONF badge) — see `~/.claude/plans/wise-leaping-charm.md`
+(eng-reviewed CLEAR, design-reviewed CLEAR, both folded-in items below
+closed in the same diff). ZONES badge replaces CONF+octave-control whenever
+real measured drift exists (data-driven, not genre-driven);
+`OCTAVE_CONTROL_CONFIDENCE_THRESHOLD` splits the octave-control trigger into
+`{dynamic: 0.35, static: 0.6}` so groove-tolerant genres (DYNAMIC,
+BREAKBEAT — D's catalog default) need a materially lower reading before
+suggesting a correction, while static/EDM-like genres (HOUSE, TECHNO) keep
+today's exact validated 0.6 behavior. Empirically grounded via a new
+jittered funk archetype in `genreFixtures.js` (Phase 3), not guessed — real
+microtiming lowers confidence (0.907→0.591 in the calibration sweep) while
+BPM stays exact and `detectTempoSegments` never false-positives, proving
+"groove ≠ drift."
+
+**Priority (historical): HIGH as of 2026-08-19 — L flagged this as top priority for next
 session** ("THIS IS PPRIORITY NOW"), after checking the finding against D
 directly and confirming it matches his own lived sense of why funk/soul
 tracks read lower confidence. Was Medium; elevated.
@@ -87,6 +104,106 @@ unverified.
 
 ---
 
+### COMMS HELP topic list is a hand-typed string, not generated from the registry
+
+**Priority:** Low
+**Blocked by:** Nothing technical.
+
+**What:** `HELP`'s topic list in `src/console/helpTopics.js` is a manually
+maintained string (`"BEATGRID · TAP · VALIDATION · HOTCUE · SHORTCUTS ·
+VOID · TEMPO"`) rather than being generated from `Object.keys(HELP_TOPICS)`
+— every new topic (most recently `TEMPO`, added with the Dynamic Tempo
+Analysis plan) requires remembering to update this line by hand, and it's
+already drifted from "self-updating" claims elsewhere (DESIGN.md previously
+claimed this was self-updating; it never was — confirmed by reading the
+actual code, not the doc, 2026-08-19). Also not clickable — typing the
+exact keyword is the only way in.
+
+**Fix:** generate the `HELP` line from `Object.keys(HELP_TOPICS)` directly
+(excluding `HELP` itself), and/or let the expandable panel show topics as
+clickable entries instead of requiring the exact typed keyword.
+
+**Why deferred:** cosmetic/maintenance-only, no functional gap — every
+topic already works once you know the keyword.
+
+---
+
+### Light Mode
+
+**Priority:** Low
+**Blocked by:** No design/scope decided yet.
+
+**What:** The console (and guest flow) is achromatic-dark by design
+(DESIGN.md's stock theme), with no light-mode variant. Flagged for a future
+`/design-consultation` pass, not scoped or built in any session so far.
+
+---
+
+### Octave-ambiguity-signature detector (competing 2×/0.5× lag) — has a proven dead zone, needs empirical validation first
+
+**Priority:** Low
+**Blocked by:** The funk fixture (`GENRE_ARCHETYPES.funk`, `src/lib/__tests__/genreFixtures.js`, shipped with the Dynamic Tempo Analysis plan) landing first — needed to empirically validate this before it gates anything.
+
+**What:** Instead of gating the octave-correction control on a flat/bucketed
+confidence threshold, extract the correlation strength at the *competing*
+octave lag (2× or 0.5× the winning tempo) inside `estimateTempoPeriod`
+(currently computed per-candidate and discarded) and gate on that specific
+signature — sound in principle, and would genuinely exceed rekordbox/Serato
+(neither exposes anything like this).
+
+**Why deferred:** has a proven dead zone, not just an untested idea — for
+any winning tempo strictly between 100-120 BPM, *neither* octave neighbor
+(200-240 or 50-60) falls inside the detector's own 60-200 BPM search range
+at all, so the signature has literally no data there, not just weak data.
+That band sits close to common hip-hop/downtempo/funk tempos in exactly D's
+catalog — the exact material this whole effort protects. Needs empirical
+validation against the funk fixture before it gates anything (risk:
+false-positive on the exact groove material this whole effort protects).
+
+---
+
+### Live/offline BPM detector search-range mismatch (60-180 vs 60-200) — unify to one range
+
+**Priority:** Low
+**Blocked by:** Nothing technical — a values-only change once a target range is picked.
+
+**What:** `useAudioAnalyzer.js`'s live detector (`detectBpm`, real-time
+autocorrelation on the rolling bass-band buffer) searches 60-180 BPM
+(`minPeriod = sampleRate * 60 / 180`, hardcoded literal, not a named
+constant); `beatDetector.js`'s offline detector (`estimateTempoPeriod`)
+searches 60-200 BPM (`MIN_BPM`/`MAX_BPM`, named exported-scope constants).
+L asked directly (2026-08-20) why these differ and to unify them.
+
+**Investigated — there is no technical reason for the gap.** Checked the
+live detector's buffer math directly: `BPM_BUF_SIZE = 240` frames (~4s at
+~60Hz rAF rate) comfortably covers a period as long as 60 BPM needs (60
+frames) with room to spare; extending the upper bound to 200 BPM only
+*shortens* the required period (18 frames vs 20 for 180) — strictly easier
+on the buffer, not harder. The `180` is simply a different hardcoded number
+than `beatDetector.js`'s `200`, with no shared source of truth and no
+buffer-size or real-time-performance constraint forcing the difference —
+two independently-chosen literals that happened to drift apart, not two
+detectors serving genuinely different ranges for a real reason.
+
+**Recommendation:** unify to **60-200** (match the offline detector's
+range, not shrink it to 180) — the live detector's real-time cost is
+already "trivially fast" per its own code comment (~7200 multiplications
+per call, run every 500ms), and extending the search range by 20 BPM adds a
+negligible number of lag candidates to that loop. Shrinking the offline
+detector to 180 instead would mean losing coverage on the 180-200 BPM band
+(some genres, e.g. hardcore/DnB, thought not currently in D's catalog).
+
+**Why deferred:** promoting the DYNAMIC/genre badge (Dynamic Tempo Analysis
+plan) to an always-visible, double-click-interactive control gives this gap
+more real user-facing surface than it had as a barely-shown badge, but it's
+still a low-frequency edge case (185-200 BPM is unusual for D's catalog) —
+not worth touching a working live-audio detector opportunistically inside
+an unrelated PR. Fix is small once picked up: change the `180` literal in
+`useAudioAnalyzer.js`'s `detectBpm` to `200` (or extract both to one shared
+constant), update `useAudioAnalyzer.test.js`'s `detectBpm` boundary assertions to match.
+
+---
+
 ### ~~WF Deck header/meter/beat-indicator spacing tightened + BEAT toggle~~ — SHIPPED + DEPLOYED 2026-08-19
 
 **What shipped (commit `1e18132`, deployed to production, verified via
@@ -122,30 +239,63 @@ concern").
 
 ---
 
-### Console-wide `aria-pressed` audit — surfaced, not built
+### ~~Console-wide `aria-pressed` audit~~ — BUILT via CONF-badge/genre plan (T13), not deferred a third time
 
-**Priority:** Low
-**Blocked by:** Nothing technical.
+**Status:** Resolved 2026-08-20. First surfaced 2026-08-19 (WF-deck design
+review), deferred once when session scope got trimmed. Resurfaced during
+`/plan-design-review` on the CONF%→ZONES/DYNAMIC badge plan (the new
+genre-cycle badge was about to become an 8th instance of the same gap) — L
+explicitly chose to fix all 8 in that PR rather than defer again: "make
+sure we do the same for the other 7! i had no idea that these were missing
+or what this means so address."
 
-**What:** During the WF-deck design review (2026-08-19), grep + direct code
-read confirmed 7 toggle buttons in `ArchitectConsole.jsx` lack
-`aria-pressed`: the `SMART` library-toolbar toggle (`.arch-browser-btn`,
-~jsx:3696 — most severe, its label is static "SMART" so screen readers get
-no state signal at all) and 6 `.arch-settings-toggle` buttons (Track Color
-Rows, Quantize, Auto Loop Default, Smart Crates' settings-panel twin, Track
-History, per-vault visibility — these six have less severe impact since
-their button text itself flips ON/OFF or ENABLED/DISABLED).
+**What was fixed:** 7 pre-existing toggle buttons in `ArchitectConsole.jsx`
+that lacked `aria-pressed` (the `SMART` library-toolbar toggle — most
+severe, its label is static "SMART" so screen readers got no state signal
+at all — plus 6 `.arch-settings-toggle` buttons: Track Color Rows,
+Quantize, Auto Loop Default, Smart Crates' settings-panel twin, Track
+History, per-vault visibility), PLUS the new genre-cycle badge from that
+plan (role, aria-label, aria-pressed-equivalent state, and an
+`announceStatus()` success announcement it didn't have before either).
 
-**Why deferred:** L initially said "build it now" when asked whether to log
-it as a TODO, then the session's scope got trimmed hard back to just the 5
-height/size-only deck items — this audit did not end up in what actually
-shipped. Confirm with L whether it's still wanted before picking it up; it
-may have been superseded by the scope trim rather than genuinely still
-wanted.
+**Fix pattern used:** one-line `aria-pressed={<existing state variable>}`
+per button, same pattern already correct on `SORT ON`, the cue bank
+selector, PLAY. See `~/.claude/plans/wise-leaping-charm.md` T13 for the
+implementation task.
 
-**Fix pattern:** one-line `aria-pressed={<existing state variable>}` per
-button, same pattern already correct on `SORT ON`, the cue bank selector,
-PLAY, and two others already in the file — no new pattern needed.
+---
+
+### MPC-pad button language for non-transport buttons — flagged, explicitly out of scope
+
+**Priority:** Low (design taste question, not a bug or gap)
+**Blocked by:** Nothing technical — needs its own design conversation, not tied to any other work.
+
+**What:** L wants every console button aside from the TRANSPORT DECK to
+look like AKAI MPC hardware pads. Checked DESIGN.md and memory directly
+(2026-08-19/20): MPC is referenced exactly once (COMMS/REACH's LCD strip,
+"MPC III / Pioneer styling" — a text-readout area, not buttons), and "pad"
+only describes the 32 hot-cue pads. No general "all buttons should be MPC
+pads" directive existed anywhere before this was raised.
+
+**Why deferred:** Surfaced as an adjacent question during
+`/plan-design-review` on the CONF%→ZONES/DYNAMIC badge plan (see
+`~/.claude/plans/wise-leaping-charm.md`'s "Adjacent design question"
+section), which is the wrong vehicle for a console-wide chrome decision
+unrelated to tempo/genre analysis. An HTML wireframe comparing three
+treatments (god-btn unchanged / MPC styling on grid-shaped controls only /
+MPC styling on all buttons) was reviewed; the question itself — including
+which of those three, if any — was explicitly left open, not decided.
+
+**Critical context for whoever picks this up:** a closely related
+button/pad-border visual-language unification was already live-tested on
+the real console and **rejected outright by L this same week** — "it looks
+worse. period." (see the "WF Deck header/meter/beat-indicator spacing"
+entry above, 2026-08-19). Start any future conversation on this from that
+rejection, not from a blank slate. It's a genuinely open question whether
+scoping MPC-styling to only trigger/grid-shaped controls (hot cues, and any
+future grid control) reads differently than the broader treatment that was
+rejected — that's the real question for a future `/plan-design-review` or
+`/design-shotgun` pass, not "try the same thing again."
 
 ---
 
@@ -550,18 +700,23 @@ may differ.
 
 ---
 
-### Reconsider pause-required gate on beatgrid editing
+### ~~Reconsider pause-required gate on beatgrid editing~~ — CONFIRMED-RESOLVED 2026-08-19
 
-**Priority:** Low (revisit only if it proves annoying in practice)
-**Blocked by:** nothing — this is a "watch and see" item, not a build task yet.
+**Status:** Closed, not left open. L confirmed directly this session ("I
+don't mind the pause gate for beatgrid") that DESIGN.md:355's 2026-07-24
+discomfort note is stale — the pause-gate pattern is not contested and was
+reused deliberately (not just copied blindly) for the new tempo-genre
+badge's double-click cycling in the Dynamic Tempo Analysis plan, same
+reasoning (a control that changes octave-correction visibility mid-set is a
+live-performance mis-click risk worth guarding).
 
-**What:** v1 of the multi-point beatgrid editor (see beat-quantize/beatgrid plan) only allows dragging/inserting anchor points while the deck is paused — disabled with a dimmed visual cue while playing, to avoid any risk of audible glitches from loop/quantize math recalculating mid-playback.
-
-**Why:** L expressed discomfort with this restriction during the `/plan-eng-review` of that plan (2026-07-22) but chose not to relitigate it mid-review. Shipping pause-only as the safe v1 default was the recommendation, but L wants it explicitly not treated as a closed question.
-
-**Context:** If D finds pausing-to-adjust-the-grid genuinely annoying once he's using the multi-point editor live, revisit whether live-editing-while-playing can be made safe (e.g., queuing grid changes to apply at the next loop/beat boundary instead of instantly, to avoid the glitch risk that motivated the pause-gate in the first place).
-
-**Depends on:** The beatgrid editor (Part 3 of the beat-quantize plan) shipping first — this is only meaningful feedback once D has actually used the paused-only version.
+**Original text (historical):** v1 of the multi-point beatgrid editor only
+allows dragging/inserting anchor points while the deck is paused — disabled
+with a dimmed visual cue while playing, to avoid any risk of audible
+glitches from loop/quantize math recalculating mid-playback. L expressed
+discomfort with this restriction during the `/plan-eng-review` of that plan
+(2026-07-22) but chose not to relitigate it mid-review; left open pending
+D's real-world reaction.
 
 ---
 
@@ -652,29 +807,24 @@ are done — see the FIXED status line at the top of this entry.
 
 ---
 
-### Octave-correction buttons only in track-list rows, never the loaded-deck header; don't reset after correcting
+### ~~Octave-correction buttons only in track-list rows, never the loaded-deck header; don't reset after correcting~~ — RESOLVED 2026-08-20
 
-**Priority:** Low
-**Blocked by:** Nothing technical.
+**Status:** Both issues fixed as part of the Dynamic Tempo Analysis plan
+(`~/.claude/plans/wise-leaping-charm.md`, T4/T6). (1) The octave-correction
+control now also renders in the loaded-deck header (`arch-deck-stats`),
+same `handleOctaveCorrect` handler, gated through `shouldShowOctaveControl`
+like every other site. (2) `handleOctaveCorrect` now PATCHes a new
+`manually_corrected: true` column alongside `detected_bpm` — kept separate
+from `detected_bpm_confidence` (which stays an honest measurement, never
+overloaded to also mean "a human intervened," per eng review 2A) — and
+`shouldShowOctaveControl` checks it directly, so the button disappears
+immediately and stays gone, not just once confidence happens to cross a
+threshold again.
 
-**What:** Found during the 2026-08-16 console-wide discoverability audit
-(already fully labeled — `aria-label`+`title` present, this is a behavior gap,
-not a documentation one, so it wasn't bundled into that pass). Two issues:
-
-1. The ½×/2× octave-correction buttons (`ArchitectConsole.jsx:3892-3923` area)
-   only render in track-list rows, never in the loaded-deck header
-   (`arch-deck-stats`) — correcting the BPM of whatever's currently on the
-   deck means leaving the deck view to find its row in the list below.
-2. `handleOctaveCorrect` never updates `detected_bpm_confidence` after
-   applying a correction, so the buttons don't disappear once used — a track
-   can be ½×'d then 2×'d repeatedly with no visual signal it's already fixed.
-
-**Why:** Real workflow friction, not urgent — D can still find the row and
-the correction still works, just requires navigation and offers no
-after-the-fact confirmation.
-
-**Depends on:** Nothing technical. Needs a small design decision on where the
-deck-header version of the control should live before building.
+**Original text (historical):** Found during the 2026-08-16 console-wide
+discoverability audit. Two issues: the ½×/2× buttons only rendered in
+track-list rows, never the loaded-deck header; and `handleOctaveCorrect`
+never updated confidence after a correction, so buttons never disappeared.
 
 ---
 

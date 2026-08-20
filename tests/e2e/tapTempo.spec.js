@@ -84,7 +84,7 @@ test("4+ taps computes a tempo and PATCHes bpm_display, deck header reflects it 
 });
 
 test("COMMS TAP topic opens correctly, same behavior as BEATGRID", async ({ page }) => {
-  const search = page.getByPlaceholder("SEARCH VAULT");
+  const search = page.getByPlaceholder("SEARCH · OR TYPE HELP");
   await search.fill("TAP");
   await expect(page.getByText("⏎ HELP")).toBeVisible();
   await search.press("Enter");

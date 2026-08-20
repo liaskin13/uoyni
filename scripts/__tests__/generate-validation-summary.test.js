@@ -47,15 +47,30 @@ describe("generate-validation-summary.js (subprocess)", () => {
     execFileSync("node", [scriptPath], { encoding: "utf8" }); // throws on non-zero exit
     const summary = JSON.parse(readFileSync(outPath, "utf8"));
     expect(summary.allPassing).toBe(true);
-    expect(summary.totalGenres).toBe(5);
-    expect(summary.genresValidated).toBe(5);
+    expect(summary.totalGenres).toBe(6);
+    expect(summary.genresValidated).toBe(6);
     expect(summary.toleranceMs).toBe(70);
     expect(Array.isArray(summary.perGenre)).toBe(true);
-    expect(summary.perGenre).toHaveLength(5);
+    expect(summary.perGenre).toHaveLength(6);
     for (const g of summary.perGenre) {
       expect(typeof g.genre).toBe("string");
       expect(typeof g.passed).toBe("boolean");
+      expect(typeof g.confidence).toBe("number");
+      expect(g.confidence).toBeGreaterThanOrEqual(0);
+      expect(g.confidence).toBeLessThanOrEqual(1);
     }
+    // funk (Dynamic Tempo Analysis, Phase 3) — the empirical proof that
+    // real microtiming/groove is not tempo drift: still passes BPM/timing
+    // validation, but measurably lower confidence than a rigid-tempo
+    // archetype (house), and lands between the two
+    // OCTAVE_CONTROL_CONFIDENCE_THRESHOLD bars (0.35 dynamic / 0.6 static).
+    const funk = summary.perGenre.find((g) => g.genre === "funk");
+    const house = summary.perGenre.find((g) => g.genre === "house");
+    expect(funk).toBeDefined();
+    expect(funk.passed).toBe(true);
+    expect(funk.confidence).toBeGreaterThan(0.35);
+    expect(funk.confidence).toBeLessThan(0.6);
+    expect(funk.confidence).toBeLessThan(house.confidence);
   });
 
   it("exits non-zero and does not silently claim success when the validation suite fails", () => {

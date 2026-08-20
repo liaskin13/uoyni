@@ -36,6 +36,7 @@ import {
   WAVEFORM_V2_SENTINEL,
 } from "../lib/waveformAnalyzer";
 import { onsetEnvelope } from "../lib/beatDetector";
+import { zoneSummary } from "../lib/beatGrid";
 import { computeHotCuePositions, migrateHotCuesToCueList } from "../lib/hotCueLayout";
 import { useValidationSummary, formatValidationSummary } from "../lib/useValidationSummary";
 import { BatchUploadQueue } from "../components/BatchUploadQueue";
@@ -281,16 +282,161 @@ export function confidenceBadgeColor(confidence) {
 
 // Shared CONF badge — used both in track-list rows and the loaded-deck
 // header (arch-deck-stats). Hidden entirely (not dimmed) until a detection
-// has actually run, per DESIGN.md's "Confidence badge" spec.
-function ConfBadge({ confidence }) {
+// has actually run, per DESIGN.md's "Confidence badge" spec. genreBucket
+// drives the tooltip copy (confidenceBadgeTitle) — defaults to "dynamic"
+// so callers that haven't threaded genre through yet still get a title.
+function ConfBadge({ confidence, genreBucket = "dynamic" }) {
   const color = confidenceBadgeColor(confidence);
+  const title = confidenceBadgeTitle(confidence, genreBucket);
   return (
     <span
       className="arch-detected-bpm-badge"
       style={{ borderColor: color, color }}
-      aria-label={`Detected BPM confidence: ${Math.round((confidence ?? 0) * 100)}%`}
+      aria-label={title}
+      title={title}
     >
       CONF {Math.round((confidence ?? 0) * 100)}%
+    </span>
+  );
+}
+
+// New badge (Dynamic Tempo Analysis) — same slot/anatomy as CONF, neutral
+// chrome (DESIGN.md "Meters vs. Chrome": a structural readout, not a
+// confidence measurement, so it doesn't inherit CONF's color exception).
+// Shows only when the track has ≥2 real beatgrid anchors. Mutually
+// exclusive with CONF + the octave control — driven by data, not genre.
+function ZonesBadge({ zones }) {
+  if (!zones) return null;
+  const title =
+    "Multiple tempo zones detected — this track's rhythm shifts, so there's no single BPM to rate confidence against.";
+  return (
+    <span className="arch-detected-bpm-badge arch-zones-badge" aria-label={title} title={title}>
+      ZONES · {zones.zoneCount} · {Math.round(zones.minBpm)}–{Math.round(zones.maxBpm)} BPM
+    </span>
+  );
+}
+
+// Dynamic Tempo Analysis (CONF-badge/genre plan) — genre vocabulary and
+// bucket lookup. Small, deliberately not exhaustive: every entry maps to a
+// validated threshold bucket rather than being a freeform/arbitrary field
+// (matches why Smart Crates skipped a genre column entirely — see "What
+// already exists" in the plan). Unknown/future genres default to "dynamic"
+// — D's catalog is the platform's core subject, so the safe default errs
+// toward not crying wolf on groove.
+export const GENRE_BUCKETS = {
+  DYNAMIC: "dynamic",
+  BREAKBEAT: "dynamic",
+  HOUSE: "static",
+  TECHNO: "static",
+};
+
+export function bucketForGenre(genre) {
+  return GENRE_BUCKETS[genre] ?? "dynamic";
+}
+
+// Resolution chain: per-track override, then console-level default, then
+// the hardcoded fallback — same "manual value, then fallback" convention
+// resolveTrackBpm already uses (track?.bpm_display || track?.bpm).
+export function resolveTrackGenre(track, consoleDefaultGenre) {
+  return track?.tempo_genre || consoleDefaultGenre || "DYNAMIC";
+}
+
+// A segmented track has no single tempo to be confident about or correct
+// toward — that's a fact about the track (real measured drift), not a
+// genre preference. When this returns non-null, the ZONES badge replaces
+// CONF + the octave control for that track, regardless of genre.
+export function resolveBeatgridZones(track) {
+  return zoneSummary(parseBeatGridPoints(track?.beat_grid_points));
+}
+
+// Replaces the flawed `!cleanBpm(bpm_display) && !t.bpm` condition at all 3
+// gate sites — that check only trims text, it doesn't distinguish "one
+// fixed BPM is manually pinned" from "a manual range like '60-80' is
+// annotated" (D's real library rows). A range means CONF/octave-control
+// should still be evaluated (there's no single manual BPM overriding
+// detection) — this function returns true ONLY for a single resolved BPM.
+export function hasCompleteManualBpm(track) {
+  const display = cleanBpm(track?.bpm_display);
+  if (display && !display.includes("-")) return true;
+  return Boolean(track?.bpm);
+}
+
+// Octave-correction trigger threshold, split out of
+// DETECTED_BPM_CONFIDENCE_THRESHOLD entirely (that constant stays
+// evidence-only, gating what BPM number resolveTrackBpm surfaces/uses for
+// quantize math — unchanged). Static keeps today's exact behavior
+// (validated, working, built for exactly that material). Dynamic requires
+// a real, materially lower reading before suggesting a correction — groove
+// alone shouldn't trigger it.
+export const OCTAVE_CONTROL_CONFIDENCE_THRESHOLD = {
+  dynamic: 0.35,
+  static: DETECTED_BPM_CONFIDENCE_THRESHOLD,
+};
+
+// false whenever real measured drift exists (ZONES badge already wins —
+// there's no single tempo to correct toward) or the BPM was already
+// manually corrected (a terminal state, not just another confidence
+// reading — see handleOctaveCorrect's manually_corrected PATCH below).
+// Otherwise compares detected_bpm_confidence against the bucket-selected
+// bar.
+export function shouldShowOctaveControl(track, genreBucket) {
+  if (resolveBeatgridZones(track)) return false;
+  if (track?.manually_corrected) return false;
+  const bar = OCTAVE_CONTROL_CONFIDENCE_THRESHOLD[genreBucket] ?? OCTAVE_CONTROL_CONFIDENCE_THRESHOLD.dynamic;
+  return (track?.detected_bpm_confidence ?? 0) < bar;
+}
+
+// Mode-aware CONF badge tooltip copy — dynamic-bucket tracks reading low
+// get an honest explanatory line (this is the direct, in-place answer to
+// the question that started this whole investigation); static-bucket
+// tracks don't get that caveat, since a low reading there is a real
+// detection problem, not expected groove.
+export function confidenceBadgeTitle(confidence, genreBucket) {
+  const pct = Math.round((confidence ?? 0) * 100);
+  if (genreBucket === "dynamic" && (confidence ?? 0) < DETECTED_BPM_CONFIDENCE_THRESHOLD) {
+    return `Detected BPM confidence: ${pct}%. Lower readings are expected for groove-based material — this measures rhythmic rigidity, not accuracy.`;
+  }
+  return `Detected BPM confidence: ${pct}%`;
+}
+
+// Tempo-genre badge (renamed/redesigned from the raw LIVE-BPM badge) — same
+// slot/span-family after the BPM digits. Always shows the track's resolved
+// genre when a track is loaded (genre is a track classification, not a
+// live measurement, so unlike the old LIVE badge this isn't gated on
+// isPlaying). Live-detected BPM number always appends while playing (same
+// as the badge it replaces — "—" fallback pre-confidence, unchanged), not
+// gated on the 0.3 confidence threshold — L corrected this 2026-08-20,
+// don't re-add the confidence gate. Interactive: double-click OR keyboard
+// (Enter/Space, it's a real focusable control since the genre bucket now
+// gates real behavior — shouldShowOctaveControl — not just a label) cycles
+// the vocabulary via onActivate, which the caller pause-gates. dimmed drops
+// this badge to 40% opacity when ZONES is active for the same track (the
+// authoritative reading in that case) — resolved design-review decision,
+// "Genre Dims."
+function DynamicGenreBadge({ genre, liveBpm, isPlaying, dimmed, onActivate }) {
+  return (
+    <span
+      className={`arch-stat arch-live-bpm arch-genre-badge${dimmed ? " arch-genre-badge--dim" : ""}`}
+      tabIndex={0}
+      role="button"
+      aria-label={`Tempo genre: ${genre}. Press Enter to cycle.`}
+      onDoubleClick={onActivate}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onActivate();
+        }
+      }}
+    >
+      {genre}
+      {isPlaying && (
+        <strong style={{ color: "var(--accent-green, #00cc66)", marginLeft: 4 }}>
+          {liveBpm ?? "—"}
+        </strong>
+      )}
+      <span className="arch-genre-badge-hint" aria-hidden="true">
+        DOUBLE-CLICK TO CYCLE
+      </span>
     </span>
   );
 }
@@ -678,6 +824,10 @@ function ArchitectConsole({
   const [trackColorRows, setTrackColorRows] = useState(true);
   const [autoLoopDefault, setAutoLoopDefault] = useState(false);
   const [quantizeEnabled, setQuantizeEnabled] = useState(false);
+  // Console-level default tempo genre — applied to tracks with no saved
+  // tempo_genre yet (D1). Follows the five-key persisted pattern below,
+  // not quantizeEnabled's session-only one.
+  const [consoleDefaultGenre, setConsoleDefaultGenre] = useState("DYNAMIC");
   const [selectedTrackIds, setSelectedTrackIds] = useState(new Set());
   const [publishFilter, setPublishFilter] = useState("all");
   const [publishState, setPublishState] = useState({
@@ -714,7 +864,7 @@ function ArchitectConsole({
   const [matrixCommitted, setMatrixCommitted] = useState({});
   const [matrixHistory, setMatrixHistory] = useState([]);
   const [liveAnnouncement, setLiveAnnouncement] = useState("");
-  const [systemStatus, setSystemStatus] = useState(null); // { message, kind: 'success'|'error' } | null — visible comms-box readout
+  const [systemStatus, setSystemStatus] = useState(null); // { message, kind: 'success'|'error'|'info' } | null — visible comms-box readout ('info' renders neutral, no CSS rule needed — .arch-comms-lcd.has-status already provides the neutral border/text default)
   const [libSearch, setLibSearch] = useState("");
   // Audio playback state
   const [isPlaying, setIsPlaying] = useState(false);
@@ -727,6 +877,9 @@ function ArchitectConsole({
   const [regeneratingWaveforms, setRegeneratingWaveforms] = useState({});
   const [waveformProgress, setWaveformProgress] = useState({}); // trackId → 0-100
   const [octaveCorrectError, setOctaveCorrectError] = useState({}); // trackId → transient error-flash flag
+  const [genreCycleError, setGenreCycleError] = useState({}); // trackId → transient error-flash flag (mirrors octaveCorrectError)
+  const octaveCorrectSeqRef = useRef({}); // trackId → latest fired PATCH sequence number
+  const genreCycleSeqRef = useRef({}); // trackId → latest fired PATCH sequence number
   const waveformQueueRef = useRef([]); // pending trackIds for sequential auto-gen
   const waveformQueueRunning = useRef(false);
 
@@ -1057,6 +1210,8 @@ function ArchitectConsole({
           setSmartCrates(prefs.smartCrates);
         if (typeof prefs.historyEnabled === "boolean")
           setHistoryEnabled(prefs.historyEnabled);
+        if (prefs.consoleDefaultGenre)
+          setConsoleDefaultGenre(prefs.consoleDefaultGenre);
       }
       if (runtime && typeof runtime === "object") {
         if (
@@ -1097,6 +1252,7 @@ function ArchitectConsole({
           autoLoopDefault,
           smartCrates,
           historyEnabled,
+          consoleDefaultGenre,
         }),
       );
     } catch (_) {}
@@ -1106,6 +1262,7 @@ function ArchitectConsole({
     smartCrates,
     trackColorRows,
     waveformDetail,
+    consoleDefaultGenre,
   ]);
 
   useEffect(() => {
@@ -2009,12 +2166,26 @@ function ArchitectConsole({
   // well. detected_beat_offset does NOT need re-deriving — the originally
   // detected beat position is still a valid beat on the corrected grid
   // (halving/doubling just changes how many of the grid's beats "count").
+  // manually_corrected marks this a terminal state, separate from
+  // detected_bpm_confidence (kept an honest measurement, never overloaded
+  // to also mean "a human intervened") — shouldShowOctaveControl checks it
+  // directly so the button disappears and stays gone, rather than waiting
+  // for confidence to cross the threshold again. Sequence-guarded (keyed by
+  // track id, not a single global counter — a correction on one track must
+  // never be discarded because a different track's correction fired more
+  // recently) per eng review OV4: the higher-stakes sibling of the new
+  // genre-cycle handler below (writes detected_bpm, which feeds real
+  // quantize/loop-length math), so it gets the same protection.
   const handleOctaveCorrect = async (track, factor) => {
     const originalTrack = trackListData.find((t) => t.id === track.id);
     const newBpm = Math.round(track.detected_bpm * factor * 100) / 100;
+    const seq = (octaveCorrectSeqRef.current[track.id] || 0) + 1;
+    octaveCorrectSeqRef.current[track.id] = seq;
 
     setTrackListData((prev) =>
-      prev.map((t) => (t.id === track.id ? { ...t, detected_bpm: newBpm } : t)),
+      prev.map((t) =>
+        t.id === track.id ? { ...t, detected_bpm: newBpm, manually_corrected: true } : t,
+      ),
     );
 
     try {
@@ -2024,12 +2195,14 @@ function ArchitectConsole({
           "PSC-Secret": UPLOAD_SECRET,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ detected_bpm: newBpm }),
+        body: JSON.stringify({ detected_bpm: newBpm, manually_corrected: true }),
       });
+      if (seq !== octaveCorrectSeqRef.current[track.id]) return; // superseded — discard silently
       if (!res.ok) throw new Error(`[PSC] octave correct PATCH ${res.status}`);
       const result = await res.json().catch(() => ({}));
       if (!result.success) throw new Error("[PSC] octave correct: D1 returned success=false");
     } catch (err) {
+      if (seq !== octaveCorrectSeqRef.current[track.id]) return; // stale — a newer correction already superseded this
       console.error("[PSC] octave correction failed:", err);
       setOctaveCorrectError((prev) => ({ ...prev, [track.id]: true }));
       setTimeout(
@@ -2043,6 +2216,71 @@ function ArchitectConsole({
       }
       announceStatus("Octave correction failed — check console for details.", "error");
     }
+  };
+
+  // Tempo-genre cycling (Dynamic Tempo Analysis) — DYNAMIC → BREAKBEAT →
+  // HOUSE → TECHNO → DYNAMIC. Same optimistic-update + rollback shape as
+  // handleOctaveCorrect, plus a per-track sequence guard: this is the first
+  // control explicitly designed for rapid repeated firing (double-clicking
+  // through all 4 values fires several PATCHes in quick succession), so an
+  // out-of-order response must never silently overwrite the on-screen
+  // (newer) value with a stale one.
+  const GENRE_CYCLE_ORDER = ["DYNAMIC", "BREAKBEAT", "HOUSE", "TECHNO"];
+  const handleGenreCycle = async (track) => {
+    const originalTrack = trackListData.find((t) => t.id === track.id);
+    const currentGenre = resolveTrackGenre(track, consoleDefaultGenre);
+    const idx = GENRE_CYCLE_ORDER.indexOf(currentGenre);
+    const nextGenre = GENRE_CYCLE_ORDER[(idx + 1) % GENRE_CYCLE_ORDER.length];
+    const seq = (genreCycleSeqRef.current[track.id] || 0) + 1;
+    genreCycleSeqRef.current[track.id] = seq;
+
+    setTrackListData((prev) =>
+      prev.map((t) => (t.id === track.id ? { ...t, tempo_genre: nextGenre } : t)),
+    );
+
+    try {
+      const res = await fetch(`${UPLOAD_WORKER_URL}/tracks/${track.id}`, {
+        method: "PATCH",
+        headers: {
+          "PSC-Secret": UPLOAD_SECRET,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ tempo_genre: nextGenre }),
+      });
+      if (seq !== genreCycleSeqRef.current[track.id]) return; // superseded — discard silently
+      if (!res.ok) throw new Error(`[PSC] genre cycle PATCH ${res.status}`);
+      const result = await res.json().catch(() => ({}));
+      if (!result.success) throw new Error("[PSC] genre cycle: D1 returned success=false");
+    } catch (err) {
+      if (seq !== genreCycleSeqRef.current[track.id]) return; // stale — a newer cycle already superseded this
+      console.error("[PSC] genre cycle failed:", err);
+      setGenreCycleError((prev) => ({ ...prev, [track.id]: true }));
+      setTimeout(
+        () => setGenreCycleError((prev) => ({ ...prev, [track.id]: false })),
+        400,
+      );
+      if (originalTrack) {
+        setTrackListData((prev) =>
+          prev.map((t) => (t.id === track.id ? originalTrack : t)),
+        );
+      }
+      announceStatus("Genre change failed — check console for details.", "error");
+    }
+  };
+
+  // Pause-gated entry point for both mouse (double-click) and keyboard
+  // (Enter/Space) activation of the genre badge — matches the beatgrid
+  // anchor editor's precedent (DESIGN.md:351): the genre bucket feeds
+  // shouldShowOctaveControl, so cycling genre mid-playback can make the
+  // octave-correction button appear/disappear right under D's hand
+  // mid-set. Not an audio-engine risk, but a live-performance mis-click
+  // risk DESIGN.md already treats as worth guarding.
+  const handleGenreBadgeActivate = (track) => {
+    if (isPlaying) {
+      announceStatus("Pause to change tempo genre", "info");
+      return;
+    }
+    handleGenreCycle(track);
   };
 
   // Persists beatgrid anchor changes (drag/insert/keyboard-nudge, all fired
@@ -2995,12 +3233,41 @@ function ArchitectConsole({
               : "SELECT A TRACK"}
           </div>
           <div className="arch-deck-stats">
-            {deckTrack &&
-              !cleanBpm(deckTrack.bpm_display) &&
-              !deckTrack.bpm &&
-              deckTrack.detected_bpm != null && (
-                <ConfBadge confidence={deckTrack.detected_bpm_confidence} />
-              )}
+            {deckTrack && (() => {
+              const zones = resolveBeatgridZones(deckTrack);
+              const genre = resolveTrackGenre(deckTrack, consoleDefaultGenre);
+              const bucket = bucketForGenre(genre);
+              if (hasCompleteManualBpm(deckTrack)) return null;
+              if (zones) return <ZonesBadge zones={zones} />;
+              if (deckTrack.detected_bpm == null) return null;
+              return (
+                <>
+                  <ConfBadge confidence={deckTrack.detected_bpm_confidence} genreBucket={bucket} />
+                  {shouldShowOctaveControl(deckTrack, bucket) && (
+                    <span className="arch-octave-controls">
+                      <button
+                        type="button"
+                        aria-label="Halve detected BPM (octave correction)"
+                        className={`god-btn arch-octave-btn ${octaveCorrectError[deckTrack.id] ? "arch-octave-error" : ""}`}
+                        onClick={() => handleOctaveCorrect(deckTrack, 0.5)}
+                        title="Halve detected BPM (octave correction)"
+                      >
+                        ½×
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Double detected BPM (octave correction)"
+                        className={`god-btn arch-octave-btn ${octaveCorrectError[deckTrack.id] ? "arch-octave-error" : ""}`}
+                        onClick={() => handleOctaveCorrect(deckTrack, 2)}
+                        title="Double detected BPM (octave correction)"
+                      >
+                        2×
+                      </button>
+                    </span>
+                  )}
+                </>
+              );
+            })()}
             <span className="arch-stat">
               BPM{" "}
               {deckTrack ? (
@@ -3031,13 +3298,14 @@ function ArchitectConsole({
                 <strong>--</strong>
               )}
             </span>
-            {isPlaying && (
-              <span className="arch-stat arch-live-bpm">
-                LIVE{" "}
-                <strong style={{ color: "var(--accent-green, #00cc66)" }}>
-                  {liveBpm ?? "—"}
-                </strong>
-              </span>
+            {deckTrack && (
+              <DynamicGenreBadge
+                genre={resolveTrackGenre(deckTrack, consoleDefaultGenre)}
+                liveBpm={liveBpm}
+                isPlaying={isPlaying}
+                dimmed={Boolean(resolveBeatgridZones(deckTrack))}
+                onActivate={() => handleGenreBadgeActivate(deckTrack)}
+              />
             )}
             {deckTrack && (
               <button
@@ -3730,6 +3998,7 @@ function ArchitectConsole({
               <button
                 className={`arch-browser-btn ${smartCrates ? "active" : ""}`}
                 onClick={() => setSmartCrates((p) => !p)}
+                aria-pressed={smartCrates}
                 title={
                   loadedTrack
                     ? "SMART — surface tracks compatible with the loaded track (BPM within 6%, key match when known)"
@@ -4119,16 +4388,18 @@ function ArchitectConsole({
                           />
                         ) : (
                           <>
-                            {!cleanBpm(t.bpm_display) &&
-                              !t.bpm &&
-                              t.detected_bpm != null && (
-                                <ConfBadge confidence={t.detected_bpm_confidence} />
-                              )}
+                            {(() => {
+                              if (hasCompleteManualBpm(t)) return null;
+                              const zones = resolveBeatgridZones(t);
+                              if (zones) return <ZonesBadge zones={zones} />;
+                              if (t.detected_bpm == null) return null;
+                              const bucket = bucketForGenre(resolveTrackGenre(t, consoleDefaultGenre));
+                              return <ConfBadge confidence={t.detected_bpm_confidence} genreBucket={bucket} />;
+                            })()}
                             <span
                               onDoubleClick={(e) => handleEditStart(e, t)}
                               className={
-                                !cleanBpm(t.bpm_display) &&
-                                !t.bpm &&
+                                !hasCompleteManualBpm(t) &&
                                 t.detected_bpm != null &&
                                 t.detected_bpm_confidence < DETECTED_BPM_CONFIDENCE_THRESHOLD
                                   ? "arch-bpm-unverified"
@@ -4144,11 +4415,9 @@ function ArchitectConsole({
                                       ? Math.round(t.detected_bpm)
                                       : "—")}
                             </span>
-                            {!cleanBpm(t.bpm_display) &&
-                              !t.bpm &&
+                            {!hasCompleteManualBpm(t) &&
                               t.detected_bpm != null &&
-                              t.detected_bpm_confidence <
-                                DETECTED_BPM_CONFIDENCE_THRESHOLD && (
+                              shouldShowOctaveControl(t, bucketForGenre(resolveTrackGenre(t, consoleDefaultGenre))) && (
                                 <span className="arch-octave-controls">
                                   <button
                                     type="button"
@@ -4657,6 +4926,15 @@ function ArchitectConsole({
             setSmartCrates={setSmartCrates}
             historyEnabled={historyEnabled}
             setHistoryEnabled={setHistoryEnabled}
+            consoleDefaultGenre={consoleDefaultGenre}
+            cycleConsoleDefaultGenre={() =>
+              setConsoleDefaultGenre(
+                (p) =>
+                  GENRE_CYCLE_ORDER[
+                    (GENRE_CYCLE_ORDER.indexOf(p) + 1) % GENRE_CYCLE_ORDER.length
+                  ],
+              )
+            }
           />
         )}
         {showSettings && viewer === "D" && (
@@ -4692,6 +4970,7 @@ function ArchitectConsole({
                   <button
                     className={`arch-settings-toggle ${trackColorRows ? "active" : ""}`}
                     onClick={() => setTrackColorRows((p) => !p)}
+                    aria-pressed={trackColorRows}
                   >
                     {trackColorRows ? "ON" : "OFF"}
                   </button>
@@ -4707,6 +4986,7 @@ function ArchitectConsole({
                   <button
                     className={`arch-settings-toggle ${quantizeEnabled ? "active" : ""}`}
                     onClick={() => setQuantizeEnabled((p) => !p)}
+                    aria-pressed={quantizeEnabled}
                   >
                     {quantizeEnabled ? "ON" : "OFF"}
                   </button>
@@ -4719,6 +4999,7 @@ function ArchitectConsole({
                   <button
                     className={`arch-settings-toggle ${autoLoopDefault ? "active" : ""}`}
                     onClick={() => setAutoLoopDefault((p) => !p)}
+                    aria-pressed={autoLoopDefault}
                   >
                     {autoLoopDefault ? "ON" : "OFF"}
                   </button>
@@ -4734,6 +5015,7 @@ function ArchitectConsole({
                   <button
                     className={`arch-settings-toggle ${smartCrates ? "active" : ""}`}
                     onClick={() => setSmartCrates((p) => !p)}
+                    aria-pressed={smartCrates}
                   >
                     {smartCrates ? "ENABLED" : "DISABLED"}
                   </button>
@@ -4746,6 +5028,7 @@ function ArchitectConsole({
                   <button
                     className={`arch-settings-toggle ${historyEnabled ? "active" : ""}`}
                     onClick={() => setHistoryEnabled((p) => !p)}
+                    aria-pressed={historyEnabled}
                   >
                     {historyEnabled ? "ENABLED" : "DISABLED"}
                   </button>
@@ -4753,6 +5036,26 @@ function ArchitectConsole({
               </section>
               <section className="arch-settings-section">
                 <h4 className="arch-settings-title">BEAT DETECTION</h4>
+                <div
+                  className="arch-settings-row"
+                  title="Applied to tracks with no per-track genre override yet (double-click the DYNAMIC/genre badge on a loaded track to set one)"
+                >
+                  <span>Default Tempo Genre</span>
+                  <button
+                    type="button"
+                    className="god-btn arch-settings-cycle-btn"
+                    onClick={() =>
+                      setConsoleDefaultGenre(
+                        (p) =>
+                          GENRE_CYCLE_ORDER[
+                            (GENRE_CYCLE_ORDER.indexOf(p) + 1) % GENRE_CYCLE_ORDER.length
+                          ],
+                      )
+                    }
+                  >
+                    {consoleDefaultGenre}
+                  </button>
+                </div>
                 <div className="arch-settings-row">
                   <span>Validation Suite</span>
                   <span className="arch-settings-value">
@@ -4854,6 +5157,7 @@ function ArchitectConsole({
                             },
                           }))
                         }
+                        aria-pressed={Boolean(edit.visibility)}
                       >
                         {edit.visibility ? "ON" : "OFF"}
                       </button>

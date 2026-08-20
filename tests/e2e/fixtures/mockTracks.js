@@ -45,6 +45,53 @@ export const FIXTURE_TRACKS = [
     duration: 240,
     waveform_data: "v2",
   },
+  {
+    // Dynamic Tempo Analysis (CONF-badge/genre plan, Phase 3) — the
+    // differentiating case: 0.45 confidence, no tempo_genre override (falls
+    // back to the DYNAMIC console default). Would have shown the
+    // octave-correct button under the old flat-0.6 rule (0.45 < 0.6); must
+    // stay hidden under the new dynamic-bucket 0.35 bar (0.45 > 0.35).
+    id: 9005,
+    title: "DYNAMIC BUCKET DIFFERENTIATOR",
+    artist: "Fixture",
+    vault: "venus",
+    duration: 240,
+    waveform_data: "v2",
+    detected_bpm: 98,
+    detected_bpm_confidence: 0.45,
+  },
+  {
+    // hasCompleteManualBpm suppression-bug fix: a manual RANGE (not a
+    // single resolved BPM) must NOT suppress the CONF badge/octave control
+    // the way a real single manual BPM does.
+    id: 9006,
+    title: "RANGE BPM TRACK",
+    artist: "Fixture",
+    vault: "venus",
+    duration: 240,
+    waveform_data: "v2",
+    bpm_display: "60-80",
+    detected_bpm: 68,
+    // Below the dynamic bucket's 0.35 bar (no tempo_genre set -> falls
+    // back to the DYNAMIC console default) so the octave control actually
+    // renders — 0.4 would sit ABOVE that bar and correctly stay hidden
+    // under the new bucket-aware gating, which would test the wrong thing.
+    detected_bpm_confidence: 0.3,
+  },
+  {
+    // manually_corrected pre-set (as if a prior octave-correct already ran)
+    // — the octave control must stay hidden regardless of confidence, a
+    // terminal state, not just another confidence reading.
+    id: 9007,
+    title: "ALREADY CORRECTED TRACK",
+    artist: "Fixture",
+    vault: "venus",
+    duration: 240,
+    waveform_data: "v2",
+    detected_bpm: 140,
+    detected_bpm_confidence: 0.2,
+    manually_corrected: true,
+  },
 ];
 
 const FIXTURE_IDS = new Set(FIXTURE_TRACKS.map((t) => t.id));

@@ -593,6 +593,55 @@
   color: var(--identity, rgba(240, 237, 232, 0.95));
 }
 
+/* Tempo-genre badge — interactive (double-click or Enter/Space cycles the
+   vocabulary), so it needs position:relative for the hover hint below and
+   a visible keyboard-focus state, unlike the plain arch-stat spans around
+   it. --dim is the resolved "Genre Dims" badge-coexistence treatment: full
+   weight when it's the only reading for the track, 40% opacity when ZONES
+   is also active and is the authoritative one. */
+.arch-genre-badge {
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+}
+
+.arch-genre-badge:focus-visible {
+  outline: 1px solid var(--identity, rgba(240, 237, 232, 0.6));
+  outline-offset: 2px;
+}
+
+.arch-genre-badge--dim {
+  opacity: 0.4;
+}
+
+/* Hover/focus discoverability hint — same pattern as .arch-hotcue-hint,
+   positioned below the badge rather than covering it (this badge isn't a
+   fixed-size square with a glow overlay that needs overflow:hidden, so
+   there's no clipping constraint forcing an inset:0 cover). */
+.arch-genre-badge-hint {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  padding: 2px 5px;
+  background: rgba(0, 0, 0, 0.88);
+  border: 1px solid var(--border, #222222);
+  color: inherit;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 100ms;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.arch-genre-badge:hover .arch-genre-badge-hint,
+.arch-genre-badge:focus-visible .arch-genre-badge-hint {
+  opacity: 1;
+}
+
 /* BEAT toggle — same compact shape as the tap-tempo button, but
    always-mounted (TAP is conditionally unmounted with no track, so it never
    needed a disabled state) with its own real disabled treatment matching

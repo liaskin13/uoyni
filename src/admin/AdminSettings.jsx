@@ -10,7 +10,7 @@ const SECTIONS = [
   { id: "lockbox", label: "LOCKBOX" },
 ];
 
-function SectionSystem({ waveformDetail, setWaveformDetail, trackColorRows, setTrackColorRows, quantizeEnabled, handleQuantizeToggle, autoLoopDefault, setAutoLoopDefault, smartCrates, setSmartCrates, historyEnabled, setHistoryEnabled }) {
+function SectionSystem({ waveformDetail, setWaveformDetail, trackColorRows, setTrackColorRows, quantizeEnabled, handleQuantizeToggle, autoLoopDefault, setAutoLoopDefault, smartCrates, setSmartCrates, historyEnabled, setHistoryEnabled, consoleDefaultGenre, cycleConsoleDefaultGenre }) {
   const validationSummary = useValidationSummary(); // T13
   return (
     <div className="adm-section-body">
@@ -82,6 +82,12 @@ function SectionSystem({ waveformDetail, setWaveformDetail, trackColorRows, setT
 
       <div className="adm-group">
         <div className="adm-group-label">BEAT DETECTION</div>
+        <div className="adm-row" title="Applied to tracks with no per-track genre override yet (double-click the DYNAMIC/genre badge on a loaded track to set one)">
+          <span className="adm-row-label">Default Tempo Genre</span>
+          <button className="adm-toggle" onClick={cycleConsoleDefaultGenre}>
+            {consoleDefaultGenre}
+          </button>
+        </div>
         <div className="adm-row">
           <span className="adm-row-label">Validation Suite</span>
           <span className="adm-row-value">{formatValidationSummary(validationSummary)}</span>
@@ -208,7 +214,7 @@ function SectionLockbox() {
   );
 }
 
-export default function AdminSettings({ onClose, members, waveformDetail, setWaveformDetail, trackColorRows, setTrackColorRows, quantizeEnabled, handleQuantizeToggle, autoLoopDefault, setAutoLoopDefault, smartCrates, setSmartCrates, historyEnabled, setHistoryEnabled }) {
+export default function AdminSettings({ onClose, members, waveformDetail, setWaveformDetail, trackColorRows, setTrackColorRows, quantizeEnabled, handleQuantizeToggle, autoLoopDefault, setAutoLoopDefault, smartCrates, setSmartCrates, historyEnabled, setHistoryEnabled, consoleDefaultGenre, cycleConsoleDefaultGenre }) {
   const [active, setActive] = useState("system");
 
   return (
@@ -254,6 +260,8 @@ export default function AdminSettings({ onClose, members, waveformDetail, setWav
               setSmartCrates={setSmartCrates}
               historyEnabled={historyEnabled}
               setHistoryEnabled={setHistoryEnabled}
+              consoleDefaultGenre={consoleDefaultGenre}
+              cycleConsoleDefaultGenre={cycleConsoleDefaultGenre}
             />
           )}
           {active === "members" && <SectionMembers members={members} />}

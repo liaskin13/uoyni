@@ -101,6 +101,28 @@ export function hitTestAnchor(points, timeSec, toleranceSec) {
 }
 
 /**
+ * Summarizes a track's beatgrid anchor points into the ZONES badge's
+ * "N zones, lo-hi BPM" reading. `< 2` points means "one flat tempo the
+ * whole way" (per buildGridSegments's backward-extension convention), not
+ * a single zone — returns null so the caller falls through to normal
+ * CONF/octave-control logic instead of showing a false "1 zone" badge.
+ *
+ * @param {{time:number, bpm:number}[]|null} points
+ * @returns {{zoneCount:number, minBpm:number, maxBpm:number}|null}
+ */
+export function zoneSummary(points) {
+  if (!points || points.length < 2) return null;
+  const valid = points.filter((p) => p && Number.isFinite(p.bpm) && p.bpm > 0);
+  if (valid.length < 2) return null;
+  const bpms = valid.map((p) => p.bpm);
+  return {
+    zoneCount: valid.length,
+    minBpm: Math.min(...bpms),
+    maxBpm: Math.max(...bpms),
+  };
+}
+
+/**
  * Snaps timeSec to the nearest beat boundary of the segment covering it —
  * used for double-click anchor insertion. We snap to the existing grid's
  * beat boundaries rather than a raw detected transient: a new tempo-change

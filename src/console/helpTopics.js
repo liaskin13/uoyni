@@ -30,11 +30,21 @@ export const HELP_TOPICS = {
       "\"PENDING VALIDATION\" means the artifact hasn't loaded yet, not that it failed.",
     ],
   },
+  TEMPO: {
+    label: "TEMPO",
+    lines: [
+      "ZONES badge replaces CONF when a track has real measured tempo drift — no single BPM to rate confidence against.",
+      "DYNAMIC/genre badge (after the BPM digits) shows the track's tempo genre: DYNAMIC, BREAKBEAT, HOUSE, or TECHNO.",
+      "Pause playback, then double-click the genre badge — or focus it and press Enter/Space — to cycle the vocabulary.",
+      "Genre changes what confidence triggers the octave-correct button: groove-based genres (DYNAMIC, BREAKBEAT) need a lower reading before it appears.",
+      "SYSTEM SETTINGS → BEAT DETECTION sets the console-wide default genre for tracks with no per-track override yet.",
+    ],
+  },
   HELP: {
     label: "HELP",
     lines: [
       "Type a keyword below, press Enter to see instructions:",
-      "BEATGRID · TAP · VALIDATION · HOTCUE · SHORTCUTS · VOID",
+      "BEATGRID · TAP · VALIDATION · HOTCUE · SHORTCUTS · VOID · TEMPO",
     ],
   },
   HOTCUE: {
