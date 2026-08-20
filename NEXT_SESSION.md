@@ -1,7 +1,59 @@
 # Next Session — Resume Here
 
-**Last updated:** 2026-08-19 (later evening — CONF % / funk-soul confidence
-finding, L's explicit top priority for next session)
+**Last updated:** 2026-08-20 — Dynamic Tempo Analysis shipped, deployed, and QA'd.
+
+## ✅ SHIPPED — Dynamic Tempo Analysis (CONF% → ZONES/DYNAMIC badges), deployed + QA'd
+
+The 2026-08-19 top-priority finding (CONF% mathematically penalizes funk/soul
+groove, not bad detection) is fully built and live at uoyni.com. Full flow:
+`/plan-design-review` (8 decisions) → build (all 13 tasks) → deploy (worker +
+frontend, migration `0013` applied) → `/qa` on live production (found + fixed
+1 real bug). Plan doc: `~/.claude/plans/wise-leaping-charm.md`.
+
+**What shipped:**
+- ZONES badge replaces CONF for tracks with real measured tempo drift
+- DYNAMIC/BREAKBEAT/HOUSE/TECHNO genre badge (double-click or keyboard to
+  cycle, pause-gated), genre-aware octave-correction threshold (0.35
+  dynamic / 0.6 static, was flat 0.6)
+- Settings-panel default-genre cycle button in both D's and L's surfaces
+- `manually_corrected` terminal state — octave-correct button now actually
+  disappears after use
+- 8 `aria-pressed` gaps closed (new badge + 7 pre-existing toggles)
+- Empirically-grounded funk fixture (jittered synthetic archetype) proves
+  microtiming lowers detector confidence without shifting BPM or
+  false-triggering drift detection
+
+**QA found + fixed 1 real Critical bug post-deploy:** `hasCompleteManualBpm`
+still suppressed CONF on D's REAL range-tagged tracks (e.g. "EIGHTYSIXTY",
+`bpm_display: "60-80"`) because those tracks also carry a legacy `t.bpm`
+value from the upload worker's own parsing — the fix's own unit tests never
+modeled that combination, so it passed tests while not fixing the real bug.
+Fixed, tested, redeployed same session (commit `917188e`). Full report:
+`.gstack/qa-reports/qa-report-uoyni-com-2026-08-20.md`. **Lesson for future
+fixture-writing:** check the real data shape via a live check, not just the
+fields the bug report happened to mention.
+
+## 🔜 Next up
+
+1. **Phase 0 (D's action, not code):** Regenerate a handful of D's real
+   variable-tempo mixes and confirm `beat_grid_points` actually populates —
+   the empirical check this whole feature's real-world value depends on.
+   Not yet done as of this handoff.
+2. **Serato-style "readout" page (new idea, L excited to try):** a page
+   showing the tempo/beat-detection math in depth (onset envelope,
+   autocorrelation, per-window tempo history) — L's own idea, floated right
+   after seeing ZONES explained. Recommended approach discussed but not
+   started: `/spec` first to pin down what "in depth" actually means, then
+   `/plan-design-review` (mockups) since DESIGN.md governs this console
+   strictly, then reach for the `dataviz` skill for the actual chart
+   rendering. Nothing built yet — pure idea stage.
+3. **Not independently re-verified live during QA** (time-boxed, covered by
+   unit/e2e instead): L's `AdminSettings.jsx` settings-panel twin, the
+   per-vault visibility `aria-pressed` toggle, octave-correction
+   appear/disappear on a real low-confidence D track. Low risk — worth a
+   quick spot-check if touching that code again.
+
+---
 
 ## Status
 
