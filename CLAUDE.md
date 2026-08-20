@@ -152,6 +152,11 @@ Key routing rules:
 - Deploy status: `npx wrangler pages deployment list --project-name psoulc` (do not infer deploy state from `env` output or from git push alone — confirmed direct-upload via `npx wrangler pages project list` showing `Git Provider: No`)
 - Health check: see Post-deploy health check above
 
+## Testing
+- Unit/component tests: `npm test` (`vitest run`) — 45+ test files under `src/`, `scripts/__tests__/`
+- E2E tests: `npx playwright test` — `tests/e2e/*.spec.js`, real browser against the dev server (`npm run dev`, port 5173). Safety: `.env` points at the REAL production Cloudflare Worker, not a mock — every e2e spec MUST route track data through `page.route()` interception (see `tests/e2e/fixtures/mockTracks.js`), never assume the dev server's network calls are safe by default.
+- `npm run preflight` — `check:design` (DESIGN.md law) + `check:pr` (PR hygiene) + `build` (includes the build-blocking validation-suite generator)
+
 ## GBrain Configuration (configured by /setup-gbrain)
 - Mode: local-stdio
 - Engine: pglite
