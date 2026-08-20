@@ -71,6 +71,15 @@ export const FIXTURE_TRACKS = [
     duration: 240,
     waveform_data: "v2",
     bpm_display: "60-80",
+    // A literal t.bpm ALSO set alongside the range — matches D's real
+    // catalog shape (found live via /qa, 2026-08-20: the upload worker's
+    // INSERT parses the first number of the typed bpm field into t.bpm
+    // regardless of whether bpm_display is a range). Without this field
+    // present in the fixture, the suppression-bug fix's unit tests could
+    // pass while the real bug (hasCompleteManualBpm falling through to
+    // Boolean(track.bpm) whenever bpm_display is a range) stayed live —
+    // exactly what happened before this fixture was corrected.
+    bpm: 60,
     detected_bpm: 68,
     // Below the dynamic bucket's 0.35 bar (no tempo_genre set -> falls
     // back to the DYNAMIC console default) so the octave control actually

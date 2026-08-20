@@ -31,6 +31,19 @@ describe("hasCompleteManualBpm", () => {
     expect(hasCompleteManualBpm({ bpm_display: "60-80" })).toBe(false);
   });
 
+  // Regression: /qa, 2026-08-20 — found live on D's real catalog. The
+  // upload worker parses whatever's typed into the single upload-time bpm
+  // field and stores BOTH the raw string (bpm_display) AND
+  // parseFloat(bpm.split("-")[0]) (t.bpm) — so a real range-tagged track
+  // (e.g. "EIGHTYSIXTY", bpm_display "60-80") ALSO carries a non-null t.bpm
+  // (80, an artifact of that same range, not independent evidence of a
+  // complete single BPM). bpm_display must win outright whenever it
+  // exists — never fall through to check t.bpm once bpm_display is a range.
+  it("is false for a manual range even when t.bpm is ALSO set (real D-catalog shape)", () => {
+    expect(hasCompleteManualBpm({ bpm_display: "60-80", bpm: 80 })).toBe(false);
+    expect(hasCompleteManualBpm({ bpm_display: "70-119", bpm: 70 })).toBe(false);
+  });
+
   it("is false when neither bpm_display nor bpm is set", () => {
     expect(hasCompleteManualBpm({})).toBe(false);
     expect(hasCompleteManualBpm({ bpm_display: "", bpm: null })).toBe(false);

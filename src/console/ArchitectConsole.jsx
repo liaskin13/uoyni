@@ -355,9 +355,23 @@ export function resolveBeatgridZones(track) {
 // annotated" (D's real library rows). A range means CONF/octave-control
 // should still be evaluated (there's no single manual BPM overriding
 // detection) — this function returns true ONLY for a single resolved BPM.
+//
+// bpm_display is authoritative whenever it exists — checked BEFORE t.bpm,
+// never falling through to it. Found live on D's real catalog (/qa,
+// 2026-08-20): rows like "EIGHTYSIXTY" (bpm_display "60-80") ALSO carry a
+// legacy t.bpm value (80) — the upload worker's own INSERT parses the
+// first number of whatever was typed into the single upload-time bpm field
+// into t.bpm (`parseFloat(bpm.split("-")[0])`) alongside storing the raw
+// string as bpm_display, so t.bpm is a byproduct of the SAME range, not
+// independent evidence of a complete single BPM. An earlier version of
+// this function fell through to `Boolean(track?.bpm)` whenever bpm_display
+// was a range, which meant D's real range-tagged tracks stayed exactly as
+// suppressed as before this fix shipped — the fix worked on synthetic test
+// fixtures (which never set t.bpm alongside a range) but not on his actual
+// library. Do not reintroduce the fallthrough.
 export function hasCompleteManualBpm(track) {
   const display = cleanBpm(track?.bpm_display);
-  if (display && !display.includes("-")) return true;
+  if (display) return !display.includes("-");
   return Boolean(track?.bpm);
 }
 
