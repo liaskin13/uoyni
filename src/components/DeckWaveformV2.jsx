@@ -13,6 +13,46 @@ import {
 } from "../lib/beatGrid";
 
 const BARS_PER_SEC = 50;
+
+// Playback-position smoothing for the draw loop — pure and exported so the
+// dense-vs-sparse-source distinction is directly unit-testable, not only
+// observable by eye on a canvas. See the call site in the draw() rAF loop
+// for the full "why" (2026-08-20 loop-engine sticky-playhead investigation):
+// short version, rawChanged compares the fresh source reading against the
+// LAST RAW READING seen (state.lastRawSeen), never against the display's
+// own drifting wall-clock extrapolation baseline (state.lastTime) — the
+// previous version conflated the two, which made completely normal forward
+// progress from a dense, continuously-accurate source (the gapless loop
+// engine) register as a false "big jump/seek" roughly every 110-140ms.
+//
+// @param {number} rawTime current reading from the playback source (seconds)
+// @param {number} now rAF high-res timestamp (ms)
+// @param {boolean} isPlaying
+// @param {boolean} isDragging
+// @param {{lastRawSeen:number, lastTime:number, lastTimeUpdate:number}} state previous call's returned state
+// @param {number} dur track duration (seconds) — display position never exceeds this
+// @returns {{ct:number, state:{lastRawSeen:number, lastTime:number, lastTimeUpdate:number}}}
+export function computeSmoothedPlayhead(rawTime, now, isPlaying, isDragging, state, dur) {
+  const rawChanged = rawTime !== state.lastRawSeen;
+  if (isPlaying && !isDragging && !rawChanged) {
+    // No new ground-truth sample since last frame (the sparse-source case,
+    // HTMLAudioElement between real timeupdate ticks) — extrapolate
+    // smoothly via wall-clock elapsed time from the last known-good
+    // baseline. State (the baseline) is intentionally NOT updated here —
+    // it stays anchored at the last real sample until one arrives.
+    const wallDelta = Math.min((now - state.lastTimeUpdate) / 1000, 0.35);
+    const ct = Math.min(state.lastTime + wallDelta, dur);
+    return { ct, state };
+  }
+  // Fresh ground truth this frame — dense source (loop engine), a sparse
+  // source's timeupdate just landed, a real seek, or a genuine loop wrap.
+  // In every one of those cases rawTime is already the correct value to
+  // show; trust it directly and reset the baseline to it.
+  return {
+    ct: rawTime,
+    state: { lastRawSeen: rawTime, lastTime: rawTime, lastTimeUpdate: now },
+  };
+}
 // Above this drift (seconds) between the drag's local running position and
 // the real live playhead, resync to the live value before applying the next
 // drag delta — catches an external seek (loop enforcement forcing a hard
@@ -84,9 +124,8 @@ export default function DeckWaveformV2({
   const bpmRef       = useRef(bpm);
   const bandsRef     = useRef(null);
 
-  // Playback smoothing: interpolate between audio.currentTime updates
-  const lastTimeRef       = useRef(0);
-  const lastTimeUpdateRef = useRef(Date.now());
+  // Playback smoothing state — see computeSmoothedPlayhead above.
+  const smoothStateRef = useRef({ lastRawSeen: 0, lastTime: 0, lastTimeUpdate: Date.now() });
   const getIsPlayingRef   = useRef(getIsPlaying);
 
   const getAudioLatencyRef = useRef(getAudioLatency);
@@ -158,21 +197,14 @@ export default function DeckWaveformV2({
       const dur = durRef.current;
       const bds = bandsRef.current;
 
-      // Playback smoothing: interpolate between audio.currentTime updates (200-300ms intervals)
-      // Only interpolate when actively playing, not dragging, and time hasn't jumped (seek)
-      // 'now' is the rAF high-res timestamp (milliseconds) — sub-ms precision vs Date.now()
-      const timeDelta = rawTime - lastTimeRef.current;
+      // Playback smoothing — see computeSmoothedPlayhead's doc comment for
+      // the full "why" (2026-08-20 loop-engine sticky-playhead investigation).
       const isPlaying = getIsPlayingRef.current?.() ?? false;
-      let ct = rawTime;
-      if (isPlaying && !isDraggingRef.current && Math.abs(timeDelta) < 0.1) {
-        // Small time delta: interpolate from last known time using wall-clock elapsed
-        const wallDelta = Math.min((now - lastTimeUpdateRef.current) / 1000, 0.35);
-        ct = Math.min(lastTimeRef.current + wallDelta, dur);
-      } else {
-        // Big time change or seek: reset interpolation baseline
-        lastTimeRef.current = rawTime;
-        lastTimeUpdateRef.current = now;
-      }
+      const smoothed = computeSmoothedPlayhead(
+        rawTime, now, isPlaying, isDraggingRef.current, smoothStateRef.current, dur,
+      );
+      const ct = smoothed.ct;
+      smoothStateRef.current = smoothed.state;
 
       // Black base — screen composite requires a dark ground
       ctx.fillStyle = "#000";
