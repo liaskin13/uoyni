@@ -2,6 +2,45 @@
 
 ---
 
+## Session: Loop-viewport-lock plan + eng review (2026-08-21)
+
+#### A thorough self-review still missed a real regression — an independent second pass caught it
+
+- **Lesson**: Ran a full `/plan-eng-review` — 4 sections, 4 findings, all resolved — on a plan to fix the loop-visual "sticky" bug (viewport locks onto the loop region while engaged). Felt complete. The outside-voice pass (independent Claude subagent, fresh context, same skill's own required step) then found a real functional regression none of the 4 sections caught: the plan's own "unify the viewport math" simplification would silently break click-to-seek for `prefers-reduced-motion` users, because it routed seeking through a ref (`viewWindowRef`) that only updates inside the canvas draw loop — which never re-runs after mount under that setting. Verified directly: the two "must stay green" regression tests both use `waveformData: null`, which hits `draw()`'s early return before that ref is ever touched, so "tests still pass" gave zero actual coverage of the new code path.
+- **Rule**: The self-review sections (architecture/code-quality/test/performance) and the outside-voice pass are not redundant — they catch different classes of bugs. Don't skip the outside voice as a formality, and don't assume "my own thorough review already covered this."
+- **How to apply**: When a review skill's outside-voice step is optional/skippable, run it anyway on anything non-trivial. When it does find something, verify the claim against the live source before accepting it (in this case: `grep waveformData` across the test files, confirmed the coincidence directly) — an independent reviewer can also be wrong, but this one wasn't.
+
+#### Copy proven guards verbatim instead of writing a "simplified" version of them
+
+- **Lesson**: While drafting a small label fix in `ArchitectConsole.jsx` during that same plan, wrote `audioDuration || deckTrack.duration || 1` instead of copying the existing, already-correct guard three lines away (`loadedTrack?.id === deckTrack?.id && audioDuration > 0 ? audioDuration : deckTrack.duration || 1`). The dropped `id` check is exactly what protects against `deckTrack` (`selectedTrack || loadedTrack`) diverging from the actually-loaded track when a user single-clicks a different row to preview it without loading — a real, reachable scenario caught by the outside-voice pass, not by me.
+- **Rule**: When adding a second call site next to an existing, working one that reads the same state, copy the existing guard exactly rather than re-deriving a "simpler" version of it. The complexity in the original guard is very often load-bearing, not accidental.
+- **How to apply**: Before writing new code adjacent to an existing correct implementation of similar logic, diff your draft against the original line by line and justify every difference — don't just eyeball "looks close enough."
+
+#### Verify architecture claims by tracing the actual computation, not the variable name
+
+- **Lesson**: Initially told the user "the zoom preset system means different things on different tracks" based on the raw `waveformZoom` number being a divisor — technically true of the number, but wrong about what the system actually guarantees. Reading the real computation (`ArchitectConsole.jsx`'s `TIME_WINDOWS_SEC.map(s => barCount/(s*50))`, recomputed fresh every track load) showed the preset SLOTS are deliberately kept at constant real-seconds meaning across every track length — the raw number varies specifically so the abstraction stays constant. Caught only because the user pushed back ("i thought that was what our zoom was doing... do you think you can figure out approximate time lengths for each of the zooms") — not because I checked first.
+- **Rule**: A variable's shape (here: "zoom is just a divisor, so it must be track-relative") is not the same as what the surrounding code guarantees about it. Trace where a value is COMPUTED, not just where it's USED, before asserting what it means.
+- **How to apply**: Before explaining "how X works" to the user with confidence, grep for where X is actually assigned/computed, not just where it's read — especially when the explanation is about to inform a design decision.
+
+---
+
+## Session: Loop playhead fix + live empirical verification via browse (2026-08-20)
+
+#### Console login via `browse`: use `press` per-digit with delays, not a batched `dispatchEvent` loop
+
+- **Lesson**: Tried to log into the Architect Console from the `browse` skill by dispatching all 4 code-digit `keydown` events (plus Enter) synchronously inside one `js` eval call. Only the first character registered ("ENTER CODE7" instead of the full code) — React's state-batching plus the window-level `keydown` listener in `src/entry/EntrySequence.jsx` doesn't reliably process a tight synchronous burst of synthetic events the way it does real, time-spaced keystrokes.
+- **Rule**: Use the browse `press <key>` command once per digit, with a short `sleep` between presses (~0.3s is enough). No manual Enter needed — `EntrySequence.jsx` auto-submits once `digits.length === LEN` (4), via its own internal `setTimeout`.
+- **Where the codes live**: entry is a synchronous, client-side 4-digit check — no network call. Codes are in `tests/e2e/fixtures/auth.js`: `{ D: "3865", L: "7677" }`, matched against `RESIDENT_REGISTRY` in `src/data/residentBlueprint.js`. The `(dead/unused) ENTRY_CODE` constant in `src/config.js` is a decoy — don't use it.
+- **How to apply**: Any future `browse`-driven console session should go straight to `press`-per-digit-with-delay; don't rediscover this by trial and error again.
+
+#### Deck-header loop-length button ("1/4" etc.) opens a panel — it does NOT engage a loop by itself
+
+- **Lesson**: Clicking the `arch-loop-size-btn` in the deck header (labeled "1/4" by default) does not start a loop. It only opens a loop-length selection panel (`setLoopPanelTrigger`) with individual length options ("1/8 T", "1/4", "1/4 D", "1/4 T", "1/2", ...). You have to click one of those panel options to actually set `loopRegion` and engage playback looping. First attempt at empirically re-measuring the loop-playhead fix silently captured an **unengaged** deck — `rawTime` played forward continuously from 0 to 15s with zero wraps — and looked like "0 spurious resets, 0 real resets," which is a misleading result that could be mistaken for a clean pass if you don't separately sanity-check that wraps are happening at all.
+- **Rule**: When driving a loop via `browse` for testing/verification, click the deck-header length button first to open the panel, THEN click the matching option inside the panel (same label, different element) to actually engage the loop. Confirm engagement via the UI text (e.g., "Loop 1/4." toast + "LOOP1/41 BEAT" readout + pause/play icon flip) or by checking that raw position data actually contains negative deltas (real wraps) before trusting a "0 resets" result as good news.
+- **How to apply**: See `src/console/ArchitectConsole.jsx` around the `arch-loop-controls` block for the two-step control structure (`arch-loop-size-btn` opens the panel; `LOOP_LENGTH_OPTIONS` are the actual engage targets).
+
+---
+
 ## Session: PR1 ship + deploy-mechanism confusion (2026-08-12)
 
 #### CLAUDE.md's "Pages deploys from main automatically" Is Wrong — Do Not Trust It

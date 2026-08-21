@@ -55,6 +55,7 @@ export default function ContextStrip({
           className={`arch-context-logo${activeContext === "nav" ? " active" : ""}`}
           onClick={() => toggle("nav")}
           aria-label="PSC navigation"
+          aria-expanded={activeContext === "nav"}
         >
           dp
         </button>
@@ -131,6 +132,7 @@ export default function ContextStrip({
           <button
             className={`arch-context-trigger${activeContext === "access" ? " active" : ""}`}
             onClick={() => toggle("access")}
+            aria-expanded={activeContext === "access"}
           >
             ACCESS CODES
           </button>

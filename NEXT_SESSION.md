@@ -1,6 +1,56 @@
 # Next Session — Resume Here
 
-**Last updated:** 2026-08-20 — Dynamic Tempo Analysis shipped, deployed, and QA'd.
+**Last updated:** 2026-08-21 — Loop-viewport-lock plan approved + eng-reviewed CLEAR, implementation NOT started.
+
+## 🔧 START HERE — Loop-viewport-lock: planned + eng-reviewed, ready to build
+
+Root-caused L's "loop feels sticky, not smooth" complaint (the follow-up to
+2026-08-20's `computeSmoothedPlayhead` fix, which was real but unproven as
+the actual cause) via live `/browse` verification, designed a fix, ran a
+full interactive `/plan-eng-review` (4 sections + independent outside-voice
+pass), got it approved. **No code written yet.**
+
+**Plan file (source of truth):**
+`/home/codespace/.claude/plans/modular-leaping-wilkinson.md` — ends with a
+`## GSTACK REVIEW REPORT` confirming CLEAR, 0 unresolved decisions. Read it
+in full before writing anything — it has exact code for every function.
+
+**Checkpoint (fuller narrative + gotchas):**
+`~/.gstack/projects/liaskin13-psoulc/checkpoints/20260821-180418-loop-viewport-lock-plan-approved-and-eng-reviewed.md`
+
+**One-line summary of the fix:** the waveform's canvas viewport has zero
+awareness of loop state — it auto-scrolls from live playback position every
+frame, built for whole-track navigation. Long loops (~4+ bars) cause a
+confirmed discontinuous background jump every wrap; short loops (the
+dominant DJ case) render into a ~25px sliver of an 800px canvas — likely the
+real "sticky" cause. Fix: two new pure functions in `DeckWaveformV2.jsx`
+(`computeLoopLockedWindow`, `stepLoopLockWindow`) that frame the loop from
+its own bounds instead of the track-length-relative auto-scroll model.
+
+**Important — the outside-voice review pass caught 2 real bugs in the
+original design that are now baked into the plan's code snippets; do NOT
+implement an earlier/simpler version from memory:**
+1. Click-seek must NOT go stale for `prefers-reduced-motion` users — the
+   plan's §4/§5 code includes a `prefersReducedMotionRef` guard for this,
+   verified to leave that population's code path byte-identical to current
+   production.
+2. The `ArchitectConsole.jsx` label fix must use
+   `loadedTrack?.id === deckTrack?.id ? audioDuration : deckTrack.duration`
+   — not a simplified version — or it shows bogus data while previewing an
+   unloaded track.
+
+**Implementation order (L explicitly wants one-fix-then-verify, not landing
+the whole plan in one shot)** — T1-T10 in the plan's own Implementation
+Tasks section, starting with `computeLoopLockedWindow` + its test file in
+isolation (lowest risk, nothing wired up yet).
+
+**Deferred, logged to TODOS.md this session, not blocking:** extending
+`LOOP_LENGTH_OPTIONS` past 8 bars (rekordbox goes to 512 beats), a
+beats-alongside-seconds zoom label, and the pre-existing
+`prefers-reduced-motion` freeze (unrelated to this fix, real accessibility
+gap, needs its own design conversation).
+
+---
 
 ## ✅ SHIPPED — Dynamic Tempo Analysis (CONF% → ZONES/DYNAMIC badges), deployed + QA'd
 

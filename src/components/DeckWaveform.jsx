@@ -218,7 +218,7 @@ export default function DeckWaveform({
       // Time ruler ticks + labels — drawn after bars so they're always visible
       ctx.lineWidth = 1;
       ctx.textAlign = "center";
-      ctx.font = "7px 'JetBrains Mono', monospace";
+      ctx.font = "7px 'Space Mono', monospace";
       for (
         let sec = Math.ceil(startTimeSec);
         sec <= Math.floor(endTimeSec);
@@ -249,7 +249,7 @@ export default function DeckWaveform({
         const beat4Sec = (60 / bpm) * 4;
         const pxPerBar = ((beat4Sec * 50) / (endBar - startBar)) * w;
         if (pxPerBar >= 20) {
-          ctx.font = "7px 'JetBrains Mono', monospace";
+          ctx.font = "7px 'Space Mono', monospace";
           ctx.fillStyle = "rgba(0,220,110,0.60)";
           const firstBeat4 = Math.ceil(startTimeSec / beat4Sec) * beat4Sec;
           for (let t = firstBeat4; t <= endTimeSec + beat4Sec; t += beat4Sec) {
@@ -309,7 +309,7 @@ export default function DeckWaveform({
           ctx.closePath();
           ctx.stroke();
           ctx.fillStyle = color;
-          ctx.font = "bold 7px JetBrains Mono, monospace";
+          ctx.font = "bold 7px 'Space Mono', monospace";
           ctx.fillText(num, x, h - 4);
         } else {
           ctx.fillStyle = color;
@@ -320,7 +320,7 @@ export default function DeckWaveform({
           ctx.closePath();
           ctx.fill();
           ctx.fillStyle = "#000";
-          ctx.font = "bold 7px JetBrains Mono, monospace";
+          ctx.font = "bold 7px 'Space Mono', monospace";
           ctx.fillText(num, x, 10);
         }
       });

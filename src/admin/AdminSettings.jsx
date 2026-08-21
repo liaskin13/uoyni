@@ -66,7 +66,7 @@ function SectionSystem({ waveformDetail, setWaveformDetail, trackColorRows, setT
             className={`adm-toggle ${smartCrates ? "active" : ""}`}
             onClick={() => setSmartCrates(p => !p)}
           >
-            {smartCrates ? "ENABLED" : "DISABLED"}
+            {smartCrates ? "ON" : "OFF"}
           </button>
         </div>
         <div className="adm-row" title="Log played tracks to your recently-played history">
@@ -75,7 +75,7 @@ function SectionSystem({ waveformDetail, setWaveformDetail, trackColorRows, setT
             className={`adm-toggle ${historyEnabled ? "active" : ""}`}
             onClick={() => setHistoryEnabled(p => !p)}
           >
-            {historyEnabled ? "ENABLED" : "DISABLED"}
+            {historyEnabled ? "ON" : "OFF"}
           </button>
         </div>
       </div>

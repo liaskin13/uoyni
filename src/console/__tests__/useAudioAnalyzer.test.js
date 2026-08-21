@@ -67,8 +67,8 @@ describe("specBarColor", () => {
   });
 
   it("returns indigo RGB in High band (freqT >= 0.836697)", () => {
-    expect(specBarColor(1.0, T_MIDHIGH_HIGH, 1)).toContain("102, 0, 255");
-    expect(specBarColor(1.0, 1.0, 1)).toContain("102, 0, 255");
+    expect(specBarColor(1.0, T_MIDHIGH_HIGH, 1)).toContain("157, 92, 255");
+    expect(specBarColor(1.0, 1.0, 1)).toContain("157, 92, 255");
   });
 
   it("amplitude modulates opacity — low normH has floor at 0.2", () => {

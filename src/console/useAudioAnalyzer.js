@@ -75,9 +75,12 @@ export function specBarColor(normH, freqT, alpha = 1) {
     g = 255;
     b = 255;
   } else {
-    // High: indigo #6600ff (ROYGBIV-correct top anchor, not an interpolated hue)
-    r = 102;
-    g = 0;
+    // High: indigo #9d5cff (ROYGBIV-correct top anchor, not an interpolated
+    // hue; lightened 2026-08-21 from #6600ff — same 264° hue, but the
+    // original failed WCAG AA text contrast when reused for the CONF badge's
+    // small Space Mono digits. L's color, L's call to change it.)
+    r = 157;
+    g = 92;
     b = 255;
   }
   // Amplitude modulates opacity: low amp = dim, high amp = bright
@@ -1025,7 +1028,7 @@ function drawEnergyMap(canvas, bars, currentTime, duration, hotCues) {
       const mm = String(Math.floor(totalSec / 60)).padStart(2, "0");
       const ss = String(totalSec % 60).padStart(2, "0");
       const label = `${mm}:${ss}`;
-      ctx.font = "bold 9px 'Chakra Petch', 'JetBrains Mono', monospace";
+      ctx.font = "bold 9px 'Chakra Petch', 'Space Mono', monospace";
       ctx.textBaseline = "top";
       const tw = ctx.measureText(label).width;
       // Pin label so it doesn't run off right edge

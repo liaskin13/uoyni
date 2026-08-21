@@ -41,6 +41,7 @@ const LISTENER_VAULTS_FALLBACK = [
 // ── CODE GATE — renders before vault when an access code is present ──────────
 function CodeGate({ code, onGranted }) {
   const [status, setStatus] = useState("loading"); // loading | error-404 | error-409 | error-410 | error-unknown
+  const [closeBlocked, setCloseBlocked] = useState(false);
 
   useEffect(() => {
     redeemCode(code)
@@ -77,15 +78,27 @@ function CodeGate({ code, onGranted }) {
       <DPWallpaper opacity={1} />
       <div className="code-gate-identity-glow" aria-hidden="true" />
       <p className="code-gate-message">{messages[status]}</p>
-      <button
-        className="code-gate-close god-btn"
-        onClick={() => {
-          window.history.back();
-          window.close();
-        }}
-      >
-        CLOSE
-      </button>
+      {closeBlocked ? (
+        <p className="code-gate-close-hint">YOU CAN CLOSE THIS TAB NOW</p>
+      ) : (
+        <button
+          className="code-gate-close god-btn"
+          onClick={() => {
+            if (window.history.length > 1) {
+              window.history.back();
+              return;
+            }
+            window.close();
+            // Neither browser history nor a script-opened tab was
+            // available, so window.close() is a silent no-op here — if
+            // we're still around a beat later, tell the guest plainly
+            // instead of leaving a CLOSE button that visibly did nothing.
+            setTimeout(() => setCloseBlocked(true), 150);
+          }}
+        >
+          CLOSE
+        </button>
+      )}
     </div>
   );
 }
@@ -413,6 +426,18 @@ function ListenerShell({ onPowerDown, sessionMeta, code, onGodModeMobile }) {
         className="listener-stage"
         id="main-content"
         onClick={selectedVault ? () => openVault(selectedVault) : undefined}
+        onKeyDown={
+          selectedVault
+            ? (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  openVault(selectedVault);
+                }
+              }
+            : undefined
+        }
+        role={selectedVault ? "button" : undefined}
+        tabIndex={selectedVault ? 0 : undefined}
         style={selectedVault ? { cursor: "pointer" } : undefined}
         aria-label={selectedVault ? `Open ${selectedVault.label}` : undefined}
       >

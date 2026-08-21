@@ -3,7 +3,7 @@
    Achromatic base. Identity injected at exactly 3 points per owner:
      .architect-console--d  →  green  #14dc14
      .architect-console--l  →  cyan   #00e5ff
-   Chakra Petch (UI) · JetBrains Mono (data)
+   Chakra Petch (UI) · Space Mono (data, via var(--font-mono))
    ───────────────────────────────────────────────────────────────────────── */
 
 /* ── Layout root — achromatic base, no identity color here ─────────────── */
@@ -204,8 +204,8 @@
 .arch-top-dot {
   font-size: 0.72rem;
   letter-spacing: 0.22em;
-  color: rgba(240, 237, 232, 0.92);
-  text-shadow: 0 0 16px rgba(240, 237, 232, 0.16);
+  color: rgba(var(--arch-fg-rgb), 0.92);
+  text-shadow: 0 0 16px rgba(var(--arch-fg-rgb), 0.16);
   background: var(--arch-accent);
   box-shadow: 0 0 8px rgba(var(--arch-accent-rgb), 0.9);
   flex-shrink: 0;
@@ -214,7 +214,7 @@
 .arch-top-name {
   gap: 8px;
   letter-spacing: 0.2em;
-  color: rgba(240, 237, 232, 0.86);
+  color: rgba(var(--arch-fg-rgb), 0.86);
   text-transform: uppercase;
   font-size: 0.66rem;
   font-weight: 600;
@@ -255,7 +255,7 @@
 }
 
 .arch-vu-label {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.54rem;
   color: rgba(var(--arch-muted-rgb), 0.35);
   letter-spacing: 0.08em;
@@ -424,7 +424,7 @@
 
 .arch-exit-btn {
   border-color: rgba(var(--arch-muted-rgb), 0.2);
-  color: rgba(240, 237, 232, 0.7);
+  color: rgba(var(--arch-fg-rgb), 0.7);
 }
 
 .arch-exit-btn:hover {
@@ -441,7 +441,7 @@
 .arch-badge {
   background: rgba(var(--arch-accent-rgb), 0.15);
   color: var(--arch-accent);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.6rem;
   padding: 1px 5px;
   border-radius: 0;
@@ -473,14 +473,14 @@
 .arch-deck-title {
   font-size: 0.96rem;
   letter-spacing: 0.1em;
-  color: rgba(240, 237, 232, 0.95);
+  color: rgba(var(--arch-fg-rgb), 0.95);
   font-weight: 600;
 }
 
 .arch-deck-artist {
   font-size: 0.64rem;
   letter-spacing: 0.14em;
-  color: rgba(240, 237, 232, 0.62);
+  color: rgba(var(--arch-fg-rgb), 0.62);
   text-transform: uppercase;
 }
 
@@ -559,15 +559,15 @@
 }
 
 .arch-stat {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.61rem;
-  color: rgba(240, 237, 232, 0.56);
+  color: rgba(var(--arch-fg-rgb), 0.56);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .arch-stat strong {
-  color: rgba(240, 237, 232, 0.96);
+  color: rgba(var(--arch-fg-rgb), 0.96);
   font-size: 0.72rem;
   font-weight: 500;
   margin-left: 5px;
@@ -576,21 +576,21 @@
 
 /* T10 — tap-tempo button. Uses the god-btn interaction pattern (border,
    hover, transitions) but overrides its default Chakra Petch face to match
-   the surrounding arch-stat family (JetBrains Mono) — it reads as part of
+   the surrounding arch-stat family (Space Mono) — it reads as part of
    the same stats row, not a visually separate control. */
 .arch-tap-tempo-btn {
   height: 18px;
   padding: 0 6px;
   margin: 0 2px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.58rem;
   letter-spacing: 0.1em;
   font-variant-numeric: tabular-nums;
 }
 
 .arch-tap-tempo-btn--active {
-  border-color: var(--identity, rgba(240, 237, 232, 0.35));
-  color: var(--identity, rgba(240, 237, 232, 0.95));
+  border-color: var(--identity, rgba(var(--arch-fg-rgb), 0.35));
+  color: var(--identity, rgba(var(--arch-fg-rgb), 0.95));
 }
 
 /* Tempo-genre badge — interactive (double-click or Enter/Space cycles the
@@ -606,7 +606,7 @@
 }
 
 .arch-genre-badge:focus-visible {
-  outline: 1px solid var(--identity, rgba(240, 237, 232, 0.6));
+  outline: 1px solid var(--identity, rgba(var(--arch-fg-rgb), 0.6));
   outline-offset: 2px;
 }
 
@@ -627,7 +627,7 @@
   background: rgba(0, 0, 0, 0.88);
   border: 1px solid var(--border, #222222);
   color: inherit;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 8px;
   letter-spacing: 0.06em;
   white-space: nowrap;
@@ -650,14 +650,14 @@
   height: 18px;
   padding: 0 6px;
   margin: 0 2px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.58rem;
   letter-spacing: 0.1em;
 }
 
 .arch-beat-toggle-btn.active {
-  border-color: var(--identity, rgba(240, 237, 232, 0.35));
-  color: var(--identity, rgba(240, 237, 232, 0.95));
+  border-color: var(--identity, rgba(var(--arch-fg-rgb), 0.35));
+  color: var(--identity, rgba(var(--arch-fg-rgb), 0.95));
 }
 
 .arch-beat-toggle-btn:disabled {
@@ -671,7 +671,7 @@
 }
 
 .arch-stat-sep {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.58rem;
   color: rgba(var(--arch-muted-rgb), 0.34);
 }
@@ -836,7 +836,7 @@
   font-family: 'Chakra Petch', sans-serif;
   font-size: 11px;
   letter-spacing: 0.18em;
-  color: rgba(240, 237, 232, 0.72);
+  color: rgba(var(--arch-fg-rgb), 0.72);
   text-align: center;
   font-weight: 400;
   text-transform: uppercase;
@@ -847,7 +847,7 @@
   align-items: center;
   gap: 0;
   padding: 6px 0 8px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: rgba(210, 225, 235, 0.8);
   line-height: 1.4;
@@ -862,7 +862,7 @@
 .arch-meta-bpm,
 .arch-meta-uploader {
   font-weight: 400;
-  color: rgba(240, 237, 232, 0.86);
+  color: rgba(var(--arch-fg-rgb), 0.86);
 }
 
 .arch-meta-sep {
@@ -1042,7 +1042,7 @@
   min-width: 120px;
   font-size: 0.56rem;
   letter-spacing: 0.08em;
-  color: rgba(240, 237, 232, 0.88);
+  color: rgba(var(--arch-fg-rgb), 0.88);
 }
 
 .arch-cue-tag {
@@ -1060,11 +1060,11 @@
     0 6px 10px rgba(0, 0, 0, 0.7),
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     inset 0 -2px 0 rgba(0, 0, 0, 0.55);
-  color: rgba(240, 237, 232, 0.82);
+  color: rgba(var(--arch-fg-rgb), 0.82);
   min-height: 22px;
   padding: 0 7px;
   font-size: 0.52rem;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   letter-spacing: 0.06em;
   cursor: pointer;
   transition: box-shadow 60ms ease, transform 60ms ease;
@@ -1088,7 +1088,7 @@
 .arch-monitor-btn:disabled,
 .arch-browser-btn:disabled,
 .arch-deck-tool-btn:disabled {
-  opacity: 0.45;
+  opacity: 0.35;
   cursor: not-allowed;
   pointer-events: none;
 }
@@ -1159,8 +1159,8 @@
 }
 
 .arch-btn:hover {
-  border-color: rgba(255, 255, 255, 0.22);
-  color: rgba(255, 255, 255, 0.70);
+  border-color: var(--arch-identity);
+  color: var(--arch-identity);
 }
 
 .arch-btn.active {
@@ -1190,7 +1190,7 @@
 }
 
 .arch-btn:disabled {
-  opacity: 0.25;
+  opacity: 0.35;
   cursor: not-allowed;
   pointer-events: none;
 }
@@ -1204,7 +1204,7 @@
     0 9px 16px rgba(0, 0, 0, 0.88),
     inset 0 1px 0 rgba(255, 255, 255, 0.09),
     inset 0 -2px 0 rgba(0, 0, 0, 0.55);
-  color: rgba(240, 237, 232, 0.92);
+  color: rgba(var(--arch-fg-rgb), 0.92);
   min-height: 34px;
   padding: 0 18px;
   font-family: 'Chakra Petch', sans-serif;
@@ -1233,7 +1233,7 @@
 }
 
 .arch-skip-btn {
-  color: rgba(240, 237, 232, 0.78);
+  color: rgba(var(--arch-fg-rgb), 0.78);
   padding: 7px 12px;
   font-size: 0.63rem;
 }
@@ -1336,8 +1336,8 @@
 }
 
 .arch-bank-btn:hover {
-  color: rgba(var(--arch-accent-rgb), 0.8);
-  border-bottom-color: rgba(var(--arch-accent-rgb), 0.35);
+  color: var(--arch-identity);
+  border-bottom-color: rgba(var(--arch-identity-rgb), 0.6);
 }
 
 .arch-bank-btn.active {
@@ -1364,7 +1364,13 @@
   border-style: dotted;
 }
 
-/* MPC-style velocity pad — raised 3D face, color-lit when cue is set */
+/* MPC-style velocity pad — raised 3D face, color-lit when cue is set.
+   Brought up to genuinely match .arch-transport-btn's tactile hardware
+   depth 2026-08-21 (gradient + outer drop-shadow + real press-down) —
+   these are D's own MPC pads, they should feel like the same instrument
+   family as TRANSPORT, not the flat god-btn language. Kept dimmer than
+   transport at rest (idle/unlit pad vs. an always-live control); the
+   existing .has-cue color glow overlay below is unchanged. */
 .arch-hotcue {
   display: inline-flex;
   flex-direction: column;
@@ -1374,11 +1380,14 @@
   width: 34px;
   height: 34px;
   padding: 0;
-  background: oklch(0.07 0.002 220);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: linear-gradient(180deg, #1c1c1c 0%, #0a0a0a 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom-color: rgba(0, 0, 0, 0.6);
   box-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.9),
+    0 4px 6px rgba(0, 0, 0, 0.6),
     inset 0 -2px 0 rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
   color: rgba(255, 255, 255, 0.22);
   font-family: 'Chakra Petch', sans-serif;
   font-size: 11px;
@@ -1443,9 +1452,9 @@
 }
 
 .arch-hotcue:active {
-  transform: translateY(1px);
+  transform: translateY(2px);
   box-shadow:
-    inset 0 0 0 rgba(0, 0, 0, 0),
+    0 1px 0 rgba(0, 0, 0, 0.9),
     inset 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
@@ -1473,8 +1482,8 @@
 }
 
 .arch-hotcue.has-cue:active {
-  transform: translateY(1px);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.9), inset 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
 /* Explicit clear affordance — always visible on an occupied pad (not
@@ -1502,7 +1511,7 @@
 
 /* Keyboard shortcut legend — toggled by ? key */
 .arch-shortcut-legend {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.55rem;
   letter-spacing: 0.04em;
   color: rgba(185, 195, 200, 0.5);
@@ -1608,9 +1617,9 @@
     0 6px 11px rgba(0, 0, 0, 0.7),
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
     inset 0 -2px 0 rgba(0, 0, 0, 0.55);
-  color: rgba(240, 237, 232, 0.98);
+  color: rgba(var(--arch-fg-rgb), 0.98);
   padding: 6px 10px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.62rem;
   letter-spacing: 0.08em;
   cursor: pointer;
@@ -1638,10 +1647,10 @@
 .arch-loop-size-btn {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  color: rgba(240, 237, 232, 0.65);
+  color: rgba(var(--arch-fg-rgb), 0.65);
   padding: 0 10px;
   height: 32px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.62rem;
   letter-spacing: 0.08em;
   cursor: pointer;
@@ -1650,7 +1659,7 @@
 }
 
 .arch-loop-size-btn:hover {
-  color: rgba(240, 237, 232, 0.95);
+  color: rgba(var(--arch-fg-rgb), 0.95);
   border-color: rgba(255, 255, 255, 0.28);
 }
 
@@ -1669,7 +1678,7 @@
   border: 1px solid #404040;
   border-bottom-color: #060606;
   box-shadow: 0 1px 0 #000, 0 2px 5px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.025);
-  color: rgba(240, 237, 232, 0.82);
+  color: rgba(var(--arch-fg-rgb), 0.82);
   padding: 6px 10px;
   font-family: 'Chakra Petch', sans-serif;
   font-size: 0.56rem;
@@ -1806,7 +1815,7 @@
   width: 100%;
   justify-content: space-between;
   border-color: rgba(var(--arch-accent-rgb), 0.18);
-  color: rgba(240, 237, 232, 0.84);
+  color: rgba(var(--arch-fg-rgb), 0.84);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(0, 0, 0, 0.18) 100%);
   box-shadow: none;
   padding: 7px 10px;
@@ -1814,7 +1823,7 @@
 
 .arch-ops-box .direct-line-badge {
   background: rgba(var(--arch-accent-rgb), 0.18);
-  color: rgba(240, 237, 232, 0.95);
+  color: rgba(var(--arch-fg-rgb), 0.95);
 }
 
 .arch-ops-toggle {
@@ -1824,7 +1833,7 @@
 .arch-rail-section-label {
   font-size: 0.52rem;
   letter-spacing: 0.24em;
-  color: rgba(240, 237, 232, 0.7);
+  color: rgba(var(--arch-fg-rgb), 0.7);
   text-transform: uppercase;
   padding: 6px 16px 4px;
 }
@@ -1842,7 +1851,7 @@
   background: transparent;
   border: none;
   border-left: 2px solid transparent;
-  color: rgba(240, 237, 232, 0.9);
+  color: rgba(var(--arch-fg-rgb), 0.9);
   padding: 8px 14px 8px 14px;
   font-family: 'Chakra Petch', sans-serif;
   font-size: 0.62rem;
@@ -1880,7 +1889,7 @@
   background: transparent;
   border: none;
   border-left: 2px solid transparent;
-  color: rgba(240, 237, 232, 0.92);
+  color: rgba(var(--arch-fg-rgb), 0.92);
   padding: 7px 14px;
   font-family: 'Chakra Petch', sans-serif;
   font-size: 0.6rem;
@@ -2002,7 +2011,7 @@
 }
 
 .arch-vault-tab-add-label {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 9px;
   letter-spacing: 0.04em;
   text-transform: none;
@@ -2012,7 +2021,7 @@
 
 .arch-vault-tab.arch-vault-tab-add:hover .arch-vault-tab-add-label,
 .arch-vault-tab.arch-vault-tab-add.active .arch-vault-tab-add-label {
-  color: rgba(240, 237, 232, 0.70);
+  color: rgba(var(--arch-fg-rgb), 0.70);
   opacity: 1;
 }
 
@@ -2057,8 +2066,8 @@
 }
 
 .arch-shortcuts-trigger:hover {
-  color: var(--arch-identity, rgba(240, 237, 232, 0.95));
-  border-color: var(--arch-identity, rgba(240, 237, 232, 0.5));
+  color: var(--arch-identity, rgba(var(--arch-fg-rgb), 0.95));
+  border-color: var(--arch-identity, rgba(var(--arch-fg-rgb), 0.5));
 }
 
 .arch-intake-tab-btn:hover {
@@ -2194,7 +2203,7 @@
   font-size: 0.55rem;
   opacity: 0.95;
   margin-left: 4px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
 }
 
 .arch-vault-tab.active .arch-vault-count {
@@ -2216,7 +2225,7 @@
   border: none;
   color: rgba(210, 225, 235, 0.75);
   padding: 6px 16px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.68rem;
   letter-spacing: 0.08em;
   flex: 1;
@@ -2246,7 +2255,7 @@
   font-size: 0.62rem;
   letter-spacing: 0.16em;
   padding: 40px 20px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
 }
 
 .arch-lib-vault-clear {
@@ -2447,7 +2456,7 @@
   display: inline-block;
   border: 1px solid var(--arch-identity, var(--arch-accent));
   color: var(--arch-identity, var(--arch-accent));
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.56rem;
   letter-spacing: 0.04em;
   padding: 1px 4px;
@@ -2469,7 +2478,7 @@
 .arch-track-date,
 .arch-track-plays,
 .arch-track-preview {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.62rem;
   color: rgba(190, 205, 214, 0.72);
   letter-spacing: 0.04em;
@@ -2488,7 +2497,7 @@
   border: 1px solid var(--border, #222222);
   padding: 1px 4px;
   margin-right: 4px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.56rem;
   letter-spacing: 0.04em;
 }
@@ -3087,7 +3096,7 @@
 .arch-data-table {
   width: 100%;
   border-collapse: collapse;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.68rem;
 }
 
@@ -3235,7 +3244,7 @@
   cursor: pointer;
   border-radius: 0;
   transition: border-color 0.12s, color 0.12s, background 0.12s;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
 }
 
 .arch-cell-on {
@@ -3279,7 +3288,7 @@
 }
 
 .arch-roster-flash-code {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 1.1rem;
   color: var(--arch-accent);
   letter-spacing: 0.2em;
@@ -3338,7 +3347,7 @@
   border: 1px solid rgba(var(--arch-accent-rgb), 0.14);
   color: rgba(220, 230, 240, 0.8);
   padding: 9px 12px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.7rem;
   border-radius: 0;
   transition: border-color 0.15s;
@@ -3359,7 +3368,7 @@
   border: 1px solid rgba(var(--arch-accent-rgb), 0.14);
   color: rgba(220, 230, 240, 0.7);
   padding: 9px 12px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.7rem;
   border-radius: 0;
 }
@@ -3452,7 +3461,7 @@
 .arch-horizon-empty {
   text-align: center;
   color: rgba(var(--arch-muted-rgb), 0.22);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.62rem;
   letter-spacing: 0.14em;
   padding: 48px 24px;
@@ -3487,14 +3496,14 @@
 }
 
 .arch-entry-origin {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.58rem;
   color: rgba(var(--arch-accent-rgb), 0.4);
   letter-spacing: 0.06em;
 }
 
 .arch-entry-time {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.56rem;
   color: rgba(var(--arch-cool-muted-rgb), 0.3);
 }
@@ -3520,7 +3529,7 @@
 }
 
 .arch-restored-badge {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.56rem;
   color: rgba(var(--arch-accent-rgb), 0.28);
   letter-spacing: 0.12em;
@@ -3535,7 +3544,7 @@
 }
 
 .arch-count {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.58rem;
   color: rgba(var(--arch-muted-rgb), 0.28);
   letter-spacing: 0.1em;
@@ -3767,7 +3776,7 @@
 }
 
 .arch-browser-btn.arch-action-error {
-  color: #cc2200;
+  color: var(--error-text, #ff4444);
   border-color: rgba(204, 34, 0, 0.5);
 }
 
@@ -3815,7 +3824,7 @@
 
 .arch-display-reach-body {
   font-size: 0.58rem;
-  color: rgba(240, 237, 232, 0.75);
+  color: rgba(var(--arch-fg-rgb), 0.75);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -73,7 +73,6 @@ h3,
 .telemetry,
 .data-readout,
 .master-clock,
-.transport-readout,
 .phosphor-readout,
 .frequency-label,
 .data-value {
@@ -436,89 +435,6 @@ h3,
 }
 
 /* Studer Transport Bar */
-.studer-transport {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: linear-gradient(135deg, #2a2a2a, #1a1a1a);
-  border-top: 1px solid var(--border);
-  padding: var(--space-lg);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.5);
-}
-
-.transport-controls {
-  display: flex;
-  gap: var(--space-md);
-}
-
-.transport-btn {
-  background: linear-gradient(135deg, #404040, #202020);
-  border: 2px solid #606060;
-  color: rgba(255, 255, 255, 0.7);
-  padding: var(--space-md) var(--space-lg);
-  font-family: var(--font-mono);
-  font-size: 0.9rem;
-  font-weight: bold;
-  cursor: pointer;
-  border-radius: 0;
-  transition: all 0.2s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-
-.transport-btn:hover {
-  background: linear-gradient(135deg, #505050, #303030);
-  box-shadow: 0 0 15px rgba(255, 255, 255, 0.12);
-}
-
-.pitch-control {
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-}
-
-.pitch-label {
-  color: var(--aged-stone);
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-
-.pitch-slider {
-  width: 150px;
-  height: 4px;
-  background: #404040;
-  border-radius: 0;
-  -webkit-appearance: none;
-}
-
-.pitch-slider:focus-visible {
-  outline: 1px solid var(--identity, rgba(240, 237, 232, 0.4));
-  outline-offset: 3px;
-}
-
-.pitch-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 20px;
-  height: 20px;
-  background: #505050;
-  border-radius: 50%;
-  cursor: pointer;
-  box-shadow: none;
-}
-
-.pitch-value {
-  color: rgba(255, 255, 255, 0.7);
-  font-family: var(--font-mono);
-  font-size: 0.9rem;
-  min-width: 40px;
-  text-align: center;
-}
 
 /* Saturn Vault */
 .saturn-vault {
@@ -553,15 +469,15 @@ h3,
 }
 
 .vault-header-kicker {
-  color: rgba(240, 237, 232, 0.58);
+  color: rgba(var(--text-primary-rgb), 0.58);
 }
 
 .vault-header-count {
-  color: var(--vault-color, rgba(240, 237, 232, 0.78));
+  color: var(--vault-color, rgba(var(--text-primary-rgb), 0.78));
 }
 
 .vault-header h1 {
-  color: rgba(240, 237, 232, 0.92);
+  color: rgba(var(--text-primary-rgb), 0.92);
   font-family: var(--font-headers, 'Chakra Petch', sans-serif);
   font-size: clamp(2rem, 8vw, 4rem);
   font-weight: 700;
@@ -572,7 +488,7 @@ h3,
 }
 
 .vault-header p {
-  color: rgba(240, 237, 232, 0.35);
+  color: rgba(var(--text-primary-rgb), 0.35);
   font-family: var(--font-primary, 'Chakra Petch', sans-serif);
   font-size: 9px;
   letter-spacing: 0.18em;
@@ -590,7 +506,7 @@ h3,
 .god-btn {
   background: transparent;
   border: 1px solid var(--border, #222222);
-  color: rgba(240, 237, 232, 0.65);
+  color: rgba(var(--text-primary-rgb), 0.65);
   padding: 0 16px;
   height: 32px;
   font-family: var(--font-ui, 'Chakra Petch', sans-serif);
@@ -606,8 +522,8 @@ h3,
 }
 
 .god-btn:hover {
-  color: var(--identity, rgba(240, 237, 232, 0.95));
-  border-color: var(--identity, rgba(240, 237, 232, 0.35));
+  color: var(--identity, rgba(var(--text-primary-rgb), 0.95));
+  border-color: var(--identity, rgba(var(--text-primary-rgb), 0.35));
 }
 
 .god-btn:active {
@@ -1219,14 +1135,14 @@ h3,
 }
 
 .vault-status-meta {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.65rem;
   letter-spacing: 0.08em;
   color: rgba(255, 255, 255, 0.32);
 }
 
 .vault-status-idle {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.7rem;
   letter-spacing: 0.18em;
   color: rgba(255, 255, 255, 0.18);
@@ -1249,7 +1165,7 @@ h3,
 }
 
 .vault-void-armed-file {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.72rem;
   letter-spacing: 0.1em;
   color: rgba(255, 255, 255, 0.55);
@@ -1309,7 +1225,7 @@ h3,
 .upload-progress-head {
   display: flex;
   justify-content: space-between;
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 0.62rem;
   letter-spacing: 0.12em;
   color: rgba(255, 255, 255, 0.85);
@@ -1381,7 +1297,7 @@ h3,
   justify-content: space-between;
   align-items: center;
   margin-bottom: 6px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.7rem;
   letter-spacing: 0.1em;
   color: rgba(255, 255, 255, 0.45);
@@ -1476,7 +1392,7 @@ h3,
 }
 
 .vault-track-count {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.65rem;
   color: rgba(255, 255, 255, 0.22);
   letter-spacing: 0.1em;
@@ -1525,7 +1441,7 @@ h3,
 }
 
 .vault-cue-num {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.6rem;
   color: rgba(255, 255, 255, 0.35);
   line-height: 1;
@@ -1536,7 +1452,7 @@ h3,
 }
 
 .vault-cue-time {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.52rem;
   color: rgba(255, 255, 255, 0.4);
   font-feature-settings: 'tnum';
@@ -1618,11 +1534,11 @@ h3,
 }
 
 .listener-header-kicker {
-  color: rgba(240, 237, 232, 0.6);
+  color: rgba(var(--text-primary-rgb), 0.6);
 }
 
 .listener-header-owner {
-  color: rgba(240, 237, 232, 0.35);
+  color: var(--text-muted, #8a8a8a);
 }
 
 .listener-header-guest {
@@ -1723,7 +1639,7 @@ h3,
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.14em;
-  color: rgba(240, 237, 232, 0.9);
+  color: rgba(var(--text-primary-rgb), 0.9);
   text-transform: uppercase;
 }
 
@@ -1740,7 +1656,7 @@ h3,
   font-family: var(--font-ui);
   font-size: 9px;
   letter-spacing: 0.18em;
-  color: rgba(240, 237, 232, 0.35);
+  color: rgba(var(--text-primary-rgb), 0.35);
   text-transform: uppercase;
 }
 
@@ -1773,7 +1689,7 @@ h3,
   font-family: var(--font-ui);
   font-size: 9px;
   letter-spacing: 0.3em;
-  color: rgba(240, 237, 232, 0.35);
+  color: rgba(var(--text-primary-rgb), 0.35);
   text-transform: uppercase;
   margin: 0 0 10px;
 }
@@ -1802,7 +1718,7 @@ h3,
   font-size: 9px;
   letter-spacing: 0.16em;
   line-height: 2;
-  color: rgba(240, 237, 232, 0.45);
+  color: rgba(var(--text-primary-rgb), 0.45);
   text-transform: uppercase;
   text-wrap: balance;
 }
@@ -1813,9 +1729,9 @@ h3,
   justify-content: center;
   width: 100%;
   height: 56px;
-  border: 1px solid var(--vault-color, rgba(240, 237, 232, 0.14));
+  border: 1px solid var(--vault-color, rgba(var(--text-primary-rgb), 0.14));
   background: transparent;
-  color: var(--vault-color, rgba(240, 237, 232, 0.78));
+  color: var(--vault-color, rgba(var(--text-primary-rgb), 0.78));
   font-family: var(--font-ui);
   font-size: 10px;
   font-weight: 500;
@@ -1826,7 +1742,7 @@ h3,
 }
 
 .listener-stage-cta:hover {
-  background: color-mix(in srgb, var(--vault-color, rgba(240,237,232,0.14)) 8%, transparent);
+  background: color-mix(in srgb, var(--vault-color, rgba(var(--text-primary-rgb),0.14)) 8%, transparent);
 }
 
 .listener-stage-cta:active {
@@ -1872,7 +1788,11 @@ h3,
   font-size: 9px;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: rgba(230, 230, 230, 0.35);
+  color: rgb(230, 230, 230);
+  /* Fully opaque — breathing is driven entirely by `opacity` below so the
+     two don't multiply into an even-dimmer combined alpha. Resting value
+     (reduced-motion users get this, unanimated) computes to ~8:1 on --void. */
+  opacity: 0.7;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -1882,8 +1802,11 @@ h3,
 }
 
 @keyframes breathe {
-  0%, 100% { opacity: 0.35; }
-  50%       { opacity: 0.65; }
+  /* Floor raised from the original 0.35 (which computed to ~2.7:1, failing
+     WCAG AA) to 0.55 (~5.2:1) — same 0.30 breathing amplitude, shifted up
+     so the dimmest point still clears 4.5:1 with real margin. */
+  0%, 100% { opacity: 0.55; }
+  50%       { opacity: 0.85; }
 }
 
 /* Bottom dock — fixed 64px bar, 3 vault switchers */
@@ -1932,14 +1855,14 @@ h3,
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: rgba(240, 237, 232, 0.14);
+  background: rgba(var(--text-primary-rgb), 0.14);
   transition: background 200ms, box-shadow 200ms;
   flex-shrink: 0;
 }
 
 .listener-dock-active .listener-dock-pip {
-  background: var(--vault-color, rgba(240, 237, 232, 0.5));
-  box-shadow: 0 0 7px var(--vault-color, rgba(240, 237, 232, 0.3));
+  background: var(--vault-color, rgba(var(--text-primary-rgb), 0.5));
+  box-shadow: 0 0 7px var(--vault-color, rgba(var(--text-primary-rgb), 0.3));
   animation: pip-breathe 3s ease-in-out infinite;
 }
 
@@ -1969,14 +1892,14 @@ h3,
   font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(240, 237, 232, 0.3);
+  color: rgba(var(--text-primary-rgb), 0.3);
   transition: color 120ms;
   text-align: center;
   line-height: 1.2;
 }
 
 .listener-dock-active .listener-dock-label {
-  color: var(--vault-color, rgba(240, 237, 232, 0.8));
+  color: var(--vault-color, rgba(var(--text-primary-rgb), 0.8));
 }
 
 /* Handoff overlay */
@@ -2045,7 +1968,7 @@ h3,
 
 .vault-header h1,
 .listener-stage-title {
-  text-shadow: 0 0 32px rgba(240, 237, 232, 0.13);
+  text-shadow: 0 0 32px rgba(var(--text-primary-rgb), 0.13);
 }
 
 .vault-commands {
@@ -2067,8 +1990,8 @@ h3,
 
 .vault-library-controls {
   align-items: center;
-  border-top: 1px solid rgba(240, 237, 232, 0.1);
-  border-bottom: 1px solid rgba(240, 237, 232, 0.08);
+  border-top: 1px solid rgba(var(--text-primary-rgb), 0.1);
+  border-bottom: 1px solid rgba(var(--text-primary-rgb), 0.08);
   background: rgba(0, 0, 0, 0.16);
   padding: 10px 8px 9px;
   margin-bottom: 6px;
@@ -2139,16 +2062,16 @@ h3,
 .listener-stage-cta:hover,
 .vault-sort-pill:hover,
 .vault-search-input:focus {
-  border-color: rgba(240, 237, 232, 0.38);
+  border-color: rgba(var(--text-primary-rgb), 0.38);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.09),
     0 10px 30px rgba(0, 0, 0, 0.55),
-    0 0 18px rgba(240, 237, 232, 0.12);
+    0 0 18px rgba(var(--text-primary-rgb), 0.12);
 }
 
 .vault-deck-waveform {
-  border-top: 1px solid rgba(240, 237, 232, 0.15);
-  border-bottom: 1px solid rgba(240, 237, 232, 0.15);
+  border-top: 1px solid rgba(var(--text-primary-rgb), 0.15);
+  border-bottom: 1px solid rgba(var(--text-primary-rgb), 0.15);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(0, 0, 0, 0.25) 100%),
     #090909;
@@ -2159,12 +2082,12 @@ h3,
 
 .listener-stage-rule {
   width: 56px;
-  background: linear-gradient(90deg, transparent 0%, var(--vault-color, rgba(240, 237, 232, 0.65)) 50%, transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, var(--vault-color, rgba(var(--text-primary-rgb), 0.65)) 50%, transparent 100%);
   opacity: 0.7;
 }
 
 .listener-dock {
-  border-top-color: rgba(240, 237, 232, 0.18);
+  border-top-color: rgba(var(--text-primary-rgb), 0.18);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(0, 0, 0, 0.88) 100%),
     #060606;
@@ -2172,7 +2095,7 @@ h3,
 
 .listener-dock-btn {
   position: relative;
-  border-right-color: rgba(240, 237, 232, 0.09);
+  border-right-color: rgba(var(--text-primary-rgb), 0.09);
 }
 
 .listener-dock-btn::before {
@@ -2191,21 +2114,13 @@ h3,
 }
 
 .listener-dock-active::before {
-  background: rgba(240, 237, 232, 0.58);
-  box-shadow: 0 0 10px rgba(240, 237, 232, 0.2);
+  background: rgba(var(--text-primary-rgb), 0.58);
+  box-shadow: 0 0 10px rgba(var(--text-primary-rgb), 0.2);
 }
 
 .listener-dock-label {
   font-weight: 600;
   letter-spacing: 0.16em;
-}
-
-.studer-transport {
-  border-top: 1px solid rgba(240, 237, 232, 0.16);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(0, 0, 0, 0.8) 100%),
-    #050505;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 /* ── TheSignal listening room ─── */
@@ -2251,7 +2166,7 @@ h3,
   display: flex;
   align-items: center;
   gap: 6px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.68rem;
   letter-spacing: 0.18em;
   color: rgba(255, 255, 255, 0.6);
@@ -2294,7 +2209,7 @@ h3,
 }
 
 .signal-stream-error {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.72rem;
   letter-spacing: 0.18em;
   color: rgba(255, 255, 255, 0.3);
@@ -2344,7 +2259,7 @@ h3,
 }
 
 .signal-chat-empty {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.62rem;
   letter-spacing: 0.14em;
   color: rgba(255, 255, 255, 0.15);
@@ -2362,7 +2277,7 @@ h3,
   font-family: 'Chakra Petch', sans-serif;
   font-size: 0.62rem;
   letter-spacing: 0.12em;
-  color: rgba(240, 237, 232, 0.55);
+  color: rgba(var(--text-primary-rgb), 0.55);
   text-transform: uppercase;
 }
 
@@ -2374,7 +2289,7 @@ h3,
 }
 
 .signal-chat-time {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.55rem;
   color: rgba(255, 255, 255, 0.2);
 }
@@ -2408,7 +2323,7 @@ h3,
   padding: 10px 14px;
   background: transparent;
   border: none;
-  color: rgba(240, 237, 232, 0.50);
+  color: rgba(var(--text-primary-rgb), 0.50);
   cursor: pointer;
   font-size: 1rem;
   transition: color 150ms;
@@ -2426,7 +2341,7 @@ h3,
 .signal-chat-locked {
   flex: 1;
   padding: 10px 12px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.58rem;
   letter-spacing: 0.14em;
   color: rgba(255, 255, 255, 0.18);
@@ -2473,7 +2388,7 @@ h3,
   display: flex;
   align-items: center;
   gap: 6px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.65rem;
   letter-spacing: 0.14em;
   color: rgba(255, 255, 255, 0.6);
@@ -2513,7 +2428,7 @@ h3,
 }
 
 .signal-panel-mono {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.62rem;
   letter-spacing: 0.06em;
   color: rgba(255, 255, 255, 0.35);
@@ -2647,12 +2562,6 @@ h3,
     justify-content: center;
   }
 
-  .transport-btn {
-    min-height: 52px;
-    min-width: 52px;
-    padding: 0 12px;
-  }
-
   .listener-stage-cta {
     min-height: 56px;
   }
@@ -2694,8 +2603,8 @@ h3,
     padding-bottom: 4px;
     padding-left: 0;
     padding-right: 0;
-    border-top-color: rgba(240, 237, 232, 0.14);
-    border-bottom-color: rgba(240, 237, 232, 0.12);
+    border-top-color: rgba(var(--text-primary-rgb), 0.14);
+    border-bottom-color: rgba(var(--text-primary-rgb), 0.12);
   }
 
   .god-btn {
@@ -2703,7 +2612,6 @@ h3,
     font-size: 0.62rem;
     letter-spacing: 0.14em;
     padding: 0 14px;
-    min-height: 40px;
     white-space: nowrap;
   }
 
@@ -2745,8 +2653,8 @@ h3,
     align-items: stretch;
     gap: 8px;
     padding: 8px 8px 6px;
-    border-top-color: rgba(240, 237, 232, 0.14);
-    border-bottom-color: rgba(240, 237, 232, 0.1);
+    border-top-color: rgba(var(--text-primary-rgb), 0.14);
+    border-bottom-color: rgba(var(--text-primary-rgb), 0.1);
   }
 
   .vault-search-input {
@@ -2795,34 +2703,6 @@ h3,
     min-height: 52px;
     padding: 0 24px;
     font-size: 0.72rem;
-  }
-
-  /* Transport bar — compact on mobile, no pitch fader */
-  .studer-transport {
-    padding: 8px 12px;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
-  .transport-controls {
-    gap: 6px;
-  }
-
-  .transport-btn {
-    padding: 0 10px;
-    font-size: 0.65rem;
-    letter-spacing: 0.1em;
-    min-height: 48px;
-    min-width: 48px;
-  }
-
-  .pitch-control {
-    display: none;
-  }
-
-  .transport-readout {
-    width: 100%;
-    order: -1;
   }
 
   .listener-dock {
@@ -2907,6 +2787,17 @@ h3,
 
 .code-gate-close {
   margin-top: 20px;
+  position: relative;
+  z-index: 1;
+}
+
+.code-gate-close-hint {
+  margin-top: 20px;
+  font-family: "Chakra Petch", sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: rgba(var(--text-primary-rgb), 0.55);
+  text-transform: uppercase;
   position: relative;
   z-index: 1;
 }
@@ -3052,7 +2943,7 @@ h3,
 }
 
 .tune-label-input:focus {
-  border-color: var(--identity, rgba(240, 237, 232, 0.4));
+  border-color: var(--identity, rgba(var(--text-primary-rgb), 0.4));
 }
 
 .tune-label-input::placeholder {
@@ -3151,19 +3042,19 @@ h3,
 }
 
 .tune-btn-cancel:hover {
-  border-color: rgba(240, 237, 232, 0.3);
+  border-color: rgba(var(--text-primary-rgb), 0.3);
   color: var(--text-primary, #f0ede8);
 }
 
 .tune-btn-save {
   background: transparent;
-  border: 1px solid var(--identity, rgba(240, 237, 232, 0.5));
+  border: 1px solid var(--identity, rgba(var(--text-primary-rgb), 0.5));
   color: var(--text-primary, #f0ede8);
 }
 
 .tune-btn-save:hover {
   background: rgba(255, 255, 255, 0.04);
-  border-color: var(--identity, rgba(240, 237, 232, 0.8));
+  border-color: var(--identity, rgba(var(--text-primary-rgb), 0.8));
 }
 
 .tune-btn:disabled {
@@ -3211,7 +3102,7 @@ h3,
 .upload-vault-btn.active {
   color: var(--text-primary, #f0ede8);
   background: rgba(255, 255, 255, 0.06);
-  border-bottom: 1px solid var(--identity, rgba(240, 237, 232, 0.5));
+  border-bottom: 1px solid var(--identity, rgba(var(--text-primary-rgb), 0.5));
 }
 
 /* Drop zone */
@@ -3227,7 +3118,7 @@ h3,
 .upload-dropzone:hover,
 .upload-dropzone.has-file,
 .upload-dropzone.is-dragging-over {
-  border-color: rgba(240, 237, 232, 0.25);
+  border-color: rgba(var(--text-primary-rgb), 0.25);
   background: rgba(255, 255, 255, 0.02);
 }
 
@@ -3312,7 +3203,7 @@ h3,
 .upload-progress-fill {
   display: block;
   height: 100%;
-  background: var(--identity, rgba(240, 237, 232, 0.7));
+  background: var(--identity, rgba(var(--text-primary-rgb), 0.7));
   transition: width 0.2s ease;
 }
 

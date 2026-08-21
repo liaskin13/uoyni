@@ -5,7 +5,7 @@
   position: fixed;
   inset: 0;
   z-index: 90;
-  background: #050505;
+  background: var(--void, #050505);
   display: grid;
   grid-template-rows: 1fr;
 }
@@ -28,7 +28,7 @@
 }
 
 .adm-nav-wordmark {
-  font-family: 'IBM Plex Sans', 'Chakra Petch', sans-serif;
+  font-family: var(--font-ui);
   font-size: 0.58rem;
   letter-spacing: 0.18em;
   color: rgba(255, 255, 255, 0.22);
@@ -45,7 +45,7 @@
   background: transparent;
   border: none;
   color: rgba(255, 255, 255, 0.36);
-  font-family: 'IBM Plex Sans', 'Chakra Petch', sans-serif;
+  font-family: var(--font-ui);
   font-size: 0.64rem;
   letter-spacing: 0.16em;
   text-align: left;
@@ -79,7 +79,7 @@
   border: none;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   color: rgba(255, 255, 255, 0.28);
-  font-family: 'IBM Plex Sans', 'Chakra Petch', sans-serif;
+  font-family: var(--font-ui);
   font-size: 0.58rem;
   letter-spacing: 0.18em;
   padding: 16px 20px;
@@ -109,7 +109,7 @@
 
 /* Cyan — placement 2: section title */
 .adm-content-title {
-  font-family: 'Sora', 'Chakra Petch', sans-serif;
+  font-family: var(--font-ui);
   font-size: 1.05rem;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -132,7 +132,7 @@
 }
 
 .adm-group-label {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.58rem;
   letter-spacing: 0.22em;
   color: rgba(255, 255, 255, 0.28);
@@ -142,7 +142,7 @@
 }
 
 .adm-group-note {
-  font-family: 'IBM Plex Sans', 'Chakra Petch', sans-serif;
+  font-family: var(--font-ui);
   font-size: 0.78rem;
   color: rgba(255, 255, 255, 0.32);
   line-height: 1.5;
@@ -150,7 +150,7 @@
 }
 
 .adm-empty {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.62rem;
   letter-spacing: 0.16em;
   color: rgba(255, 255, 255, 0.2);
@@ -167,14 +167,14 @@
 }
 
 .adm-row-label {
-  font-family: 'IBM Plex Sans', 'Chakra Petch', sans-serif;
+  font-family: var(--font-ui);
   font-size: 0.82rem;
-  color: rgba(240, 237, 232, 0.68);
+  color: rgba(var(--text-primary-rgb), 0.68);
 }
 
 /* T13 — read-only info value (validation numbers), not a toggle button. */
 .adm-row-value {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.58rem;
   letter-spacing: 0.1em;
   color: rgba(255, 255, 255, 0.42);
@@ -187,7 +187,7 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: var(--shadow-btn-outset);
   color: rgba(255, 255, 255, 0.42);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.58rem;
   letter-spacing: 0.14em;
   padding: 6px 12px;
@@ -218,7 +218,7 @@
 }
 
 .adm-table th {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.54rem;
   letter-spacing: 0.18em;
   color: rgba(255, 255, 255, 0.28);
@@ -229,9 +229,9 @@
 }
 
 .adm-table td {
-  font-family: 'IBM Plex Sans', 'Chakra Petch', sans-serif;
+  font-family: var(--font-ui);
   font-size: 0.8rem;
-  color: rgba(240, 237, 232, 0.72);
+  color: rgba(var(--text-primary-rgb), 0.72);
   padding: 11px 12px 11px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   vertical-align: middle;
@@ -242,7 +242,7 @@
 }
 
 .adm-cell-mono {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.68rem;
   letter-spacing: 0.1em;
 }
@@ -252,7 +252,7 @@
 }
 
 .adm-cell-code {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.78rem;
   letter-spacing: 0.12em;
   cursor: pointer;
@@ -263,7 +263,7 @@
 
 .adm-cell-code:hover,
 .adm-cell-code:focus {
-  color: rgba(240, 237, 232, 0.92);
+  color: rgba(var(--text-primary-rgb), 0.92);
 }
 
 .adm-cell-code:focus:not(:focus-visible) {
@@ -271,13 +271,14 @@
 }
 
 .adm-cell-code:focus-visible {
-  outline: 1px solid rgba(240, 237, 232, 0.35);
+  outline: 1px solid rgba(var(--text-primary-rgb), 0.35);
   outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .adm-toggle,
   .adm-nav-item,
+  .adm-nav-close,
   .adm-cell-code {
     transition: none;
   }

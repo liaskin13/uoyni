@@ -586,7 +586,7 @@ export function computeDownbeatData(bars, detected, tempoSegments, duration, fra
 export async function generateAndUploadWaveformV2(trackId, audioUrl, onProgress) {
   if (onProgress) onProgress(5);
 
-  const { high: bars, duration } = await analyzeAudio(audioUrl, null, 80, 50);
+  const { high: bars, duration } = await analyzeAudio(audioUrl, null, 80, 50, onProgress);
 
   if (onProgress) onProgress(55);
 

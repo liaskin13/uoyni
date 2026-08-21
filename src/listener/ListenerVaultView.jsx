@@ -242,17 +242,16 @@ function WaveformCanvas({ track, currentTime, duration, ghost = false, onSeek, m
     return () => { ro.disconnect(); cancelAnimationFrame(raf); };
   }, [draw]);
 
-  // rAF loop — keeps scrolling without prop-driven re-renders
+  // rAF loop — keeps scrolling without prop-driven re-renders. Skipped
+  // entirely in ghost mode: static bars, no playhead, nothing to animate —
+  // the ResizeObserver effect above already draws it once on mount/resize.
   useEffect(() => {
+    if (ghost) return;
     let rafId;
     const loop = () => { draw(); rafId = requestAnimationFrame(loop); };
     rafId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(rafId);
-  }, [draw]);
-
-  const handleMainClick = useCallback((e) => {
-    performSeekFromEvent(e);
-  }, [performSeekFromEvent]);
+  }, [draw, ghost]);
 
   const performSeekFromEvent = useCallback((e) => {
     if (!onSeek) return;
@@ -281,6 +280,10 @@ function WaveformCanvas({ track, currentTime, duration, ghost = false, onSeek, m
     const clickedBar = startBar + Math.round(frac * barCount);
     onSeek(Math.max(0, Math.min((clickedBar / totalBars) * dur, dur)));
   }, [onSeek, ghost]);
+
+  const handleMainClick = useCallback((e) => {
+    performSeekFromEvent(e);
+  }, [performSeekFromEvent]);
 
   const handleMainMouseDown = useCallback((e) => {
     if (!onSeek) return;
@@ -330,6 +333,26 @@ function WaveformCanvas({ track, currentTime, duration, ghost = false, onSeek, m
     onSeek(((e.clientX - rect.left) / rect.width) * dur);
   }, [onSeek]);
 
+  const handleMainKeyDown = useCallback((e) => {
+    if (!onSeek) return;
+    const dur = durRef.current;
+    if (!dur) return;
+    const step = e.shiftKey ? 30 : 5;
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      onSeek(Math.max(0, ctRef.current - step));
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      onSeek(Math.min(dur, ctRef.current + step));
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      onSeek(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      onSeek(dur);
+    }
+  }, [onSeek]);
+
   return (
     <div className={`lvv-waveform-wrap${ghost ? ' lvv-waveform-ghost-wrap' : ''}`}>
       {!ghost && (
@@ -344,8 +367,15 @@ function WaveformCanvas({ track, currentTime, duration, ghost = false, onSeek, m
       <canvas
         ref={mainRef}
         className={`lvv-waveform-canvas${isDragging ? ' is-dragging' : ''}`}
-        aria-hidden="true"
+        role={onSeek ? 'slider' : undefined}
+        aria-hidden={onSeek ? undefined : 'true'}
+        aria-label={onSeek ? 'Playback position' : undefined}
+        aria-valuemin={onSeek ? 0 : undefined}
+        aria-valuemax={onSeek ? Math.round(duration) : undefined}
+        aria-valuenow={onSeek ? Math.round(currentTime) : undefined}
+        tabIndex={onSeek ? 0 : undefined}
         onClick={onSeek ? handleMainClick : undefined}
+        onKeyDown={onSeek ? handleMainKeyDown : undefined}
         onMouseDown={onSeek ? handleMainMouseDown : undefined}
         onMouseMove={onSeek ? handleMainMouseMove : undefined}
         onMouseUp={onSeek ? handleMainMouseUp : undefined}
@@ -359,6 +389,29 @@ function WaveformCanvas({ track, currentTime, duration, ghost = false, onSeek, m
     </div>
   );
 }
+
+// Single track-list row. Memoized so the audioEngine `timeupdate` ticks
+// that re-render the parent every fraction of a second (to drive the
+// mini-transport clock) don't force every row's ThumbnailCanvas to
+// redraw too — only the row(s) whose actual props changed re-render.
+const TrackRow = React.memo(function TrackRow({ track, index, isActive, onSelect }) {
+  return (
+    <button
+      className={`lvv-track-row${isActive ? ' lvv-track-row--active' : ''}`}
+      onClick={() => onSelect(track)}
+      role="listitem"
+    >
+      <span className="lvv-track-num">{String(index + 1).padStart(2, '0')}</span>
+      <span className="lvv-track-info">
+        <span className="lvv-track-title">{track.title || 'UNTITLED'}</span>
+        {track.duration != null && (
+          <span className="lvv-track-dur">{formatDuration(track.duration)}</span>
+        )}
+      </span>
+      <ThumbnailCanvas track={track} />
+    </button>
+  );
+});
 
 // Thumbnail for track list rows (uses low-res 80-bar data)
 function ThumbnailCanvas({ track }) {
@@ -422,14 +475,40 @@ function WaveformImg({ track, currentTime, duration, ghost, onSeek, mode = 'wave
     );
   }
 
+  const canSeek = onSeek && duration > 0;
+  const handleImgKeyDown = (e) => {
+    if (!canSeek) return;
+    const step = e.shiftKey ? 30 : 5;
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      onSeek(Math.max(0, currentTime - step));
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      onSeek(Math.min(duration, currentTime + step));
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      onSeek(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      onSeek(duration);
+    }
+  };
+
   return (
     <div
       className={`lvv-waveform-wrap${ghost ? ' lvv-waveform-ghost-wrap' : ''}`}
       style={{ position: 'relative', cursor: onSeek ? 'pointer' : 'default' }}
-      onClick={onSeek && duration > 0 ? (e) => {
+      onClick={canSeek ? (e) => {
         const rect = e.currentTarget.getBoundingClientRect();
         onSeek(((e.clientX - rect.left) / rect.width) * duration);
       } : undefined}
+      onKeyDown={canSeek ? handleImgKeyDown : undefined}
+      role={canSeek ? 'slider' : undefined}
+      tabIndex={canSeek ? 0 : undefined}
+      aria-label={canSeek ? 'Playback position' : undefined}
+      aria-valuemin={canSeek ? 0 : undefined}
+      aria-valuemax={canSeek ? Math.round(duration) : undefined}
+      aria-valuenow={canSeek ? Math.round(currentTime) : undefined}
     >
       <img
         src={pngUrl}
@@ -752,21 +831,13 @@ function ListenerVaultView({ vault, vaultColor, vaultLabel, onBack, onExitSystem
                 </div>
               )}
               {!loading && tracks.map((track, i) => (
-                <button
+                <TrackRow
                   key={track.id}
-                  className={`lvv-track-row${activeTrack?.id === track.id ? ' lvv-track-row--active' : ''}`}
-                  onClick={() => handleTrackSelect(track)}
-                  role="listitem"
-                >
-                  <span className="lvv-track-num">{String(i + 1).padStart(2, '0')}</span>
-                  <span className="lvv-track-info">
-                    <span className="lvv-track-title">{track.title || 'UNTITLED'}</span>
-                    {track.duration != null && (
-                      <span className="lvv-track-dur">{formatDuration(track.duration)}</span>
-                    )}
-                  </span>
-                  <ThumbnailCanvas track={track} />
-                </button>
+                  track={track}
+                  index={i}
+                  isActive={activeTrack?.id === track.id}
+                  onSelect={handleTrackSelect}
+                />
               ))}
             </div>
             {activeTrack && (
@@ -805,3 +876,4 @@ function ListenerVaultView({ vault, vaultColor, vaultLabel, onBack, onExitSystem
 }
 
 export default ListenerVaultView;
+export { WaveformCanvas };

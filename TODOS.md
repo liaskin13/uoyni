@@ -1100,6 +1100,302 @@ a screenshot).
 
 ---
 
+### Waveform display freezes entirely under prefers-reduced-motion
+
+**Priority:** Medium
+**Blocked by:** Nothing — needs a design decision on what "reduced motion"
+should mean for a live position readout, not a technical blocker.
+
+**What:** `DeckWaveformV2.jsx`'s `draw()` runs once synchronously at mount,
+then only continues via `requestAnimationFrame` `if (!prefersReduced)`.
+Under `prefers-reduced-motion`, the entire waveform — playhead, auto-scroll,
+hot cues, and (as of the loop-viewport-lock fix) the loop-lock framing — is
+static after the first frame. A user with that OS preference who plays
+audio or engages a loop sees a frozen image with no indication of where
+playback actually is.
+
+**Why:** Surfaced during the loop-viewport-lock eng review (2026-08-21,
+Architecture Issue 3) while tracing the rAF gate. Pre-existing — not
+introduced or worsened by that fix; loop-lock is exactly as frozen as
+everything else in this component already is under that setting.
+
+**Context:** The real fix likely needs to separate two different things
+"reduced motion" currently conflates: cosmetic transitions (zoom smoothing,
+the loop-lock ease) which SHOULD respect the preference and snap instantly
+instead of animating, versus position-critical state (playhead, auto-scroll)
+which arguably should keep updating regardless — freezing a live audio
+position readout isn't really what `prefers-reduced-motion` is for. Start
+by re-reading the `prefersReduced` gate at the top of the `draw()`-loop
+`useEffect`.
+
+**Depends on:** Nothing technical.
+
+---
+
+### Loop-length range doesn't match rekordbox's documented ceiling
+
+**Priority:** Low
+**Blocked by:** A product decision — does D's actual hip-hop/R&B workflow
+need loops longer than 8 bars?
+
+**What:** `LOOP_LENGTH_OPTIONS` (`ArchitectConsole.jsx` lines 134-163) tops
+out at 8 bars. rekordbox's official manual (confirmed via direct full-text
+search of the downloaded PDF) supports 1/64 to 512 beats (128 bars),
+halve/double from the loop-in point, power-of-2 only.
+
+**Why:** DESIGN.md's explicit standing bar for overlapping features is
+"meet or beat rekordbox/Serato" (confirmed with D). We already exceed
+rekordbox on rhythmic subdivision variety — we have dotted and triplet loop
+lengths, confirmed absent from rekordbox's manual entirely — but we're well
+short of their long-loop ceiling.
+
+**Context:** Surfaced during the loop-viewport-lock investigation
+(2026-08-21). Not a technical blocker, but interacts with that fix's own
+`LOOP_LOCK_MAX_WINDOW_SEC` bound (64s) — if loops longer than 8 bars become
+selectable, that constant would need reconsidering so very long loops don't
+get clipped or forced into an awkwardly zoomed-out frame.
+
+**Depends on:** Nothing technical. Interacts with `computeLoopLockedWindow`'s
+max-window bound if picked up.
+
+---
+
+### Deck-header zoom label shows seconds only, not beats
+
+**Priority:** Low
+**Blocked by:** Nothing.
+
+**What:** Extend the deck-header `{N}s ↑↓` zoom-seconds label
+(`ArchitectConsole.jsx:3425`) to also show the equivalent in beats (e.g.
+"32s / 10.7 beats"), using the track's resolved BPM.
+
+**Why:** Raised directly by L during the loop-viewport-lock plan review —
+seconds alone don't communicate how much musical content (bars/beats) is
+currently visible, which is the more natural framing for beatmatching and
+arrangement work. The existing zoom-preset system (`TIME_WINDOWS_SEC`) is
+purely seconds-based, so the same zoom preset shows more bars on a fast
+track than a slow one — exactly consistent in time, inconsistent in
+musical content.
+
+**Context:** BPM is already available via `resolveTrackBpm(deckTrack)`,
+used elsewhere in `ArchitectConsole.jsx` — the label math is
+`visibleSeconds * bpm / 60`. Should land right next to the existing seconds
+label, which the loop-viewport-lock plan already makes loop-lock-aware.
+Separately raises a genuinely bigger, explicitly unresolved question from
+the same conversation: should the WHOLE zoom-preset system be redefined in
+bars/beats instead of seconds, not just this one label? That's a much
+larger redesign and its own investigation — don't conflate the two when
+picking this up.
+
+**Depends on:** Nothing for the label alone.
+
+---
+
+### "Show your work" page — surface the actual math behind BPM/CONF/ZONES
+
+**Priority:** Medium
+**Blocked by:** Nothing technical — needs a decision on scope/location (own
+route? panel inside AdminSettings? console rail?) before building.
+
+**What:** L wants a separate place to see how the numbers behind the
+tempo-analysis system were actually calculated — not just the resolved
+output (a BPM, a confidence %, a ZONES range) but the underlying
+math/signal for a given track: the onset envelope, the autocorrelation
+score that produced `detected_bpm_confidence`, where `detectTempoSegments`
+found (or didn't find) real drift, and why a track landed in the
+dynamic/static genre bucket it did.
+
+**Why:** Raised 2026-08-21 right after seeing the CONF/ZONES badges
+explained for the first time — L's reaction was "it is cool as fuck" and
+immediately wanted a way to inspect the reasoning per-track rather than
+just trusting the badge. Good instinct: this system (`beatDetector.js`,
+`waveformAnalyzer.js`, `useAudioAnalyzer.js`) has several non-obvious,
+heavily-commented decisions (sqrt boost, EMA smoothing, the dynamic/static
+confidence-threshold split) that are currently only legible by reading
+source code and DESIGN.md's Decisions Log — there's no in-product way to
+see "why does this track read 62%" beyond the badge's own tooltip.
+
+**Context:** Real inputs already exist and are computed per-track today —
+`bars` (the envelope data), `tempoSegments`, `detectedBpmConfidence` are
+all returned by `analyzeWaveform`/`generateAndUploadWaveformV2`
+(`src/lib/waveformAnalyzer.js`) but only the final resolved values get
+persisted/displayed; the intermediate signal isn't kept around per-track
+today. Scope needs a decision: is this a debug-only surface (console-only,
+maybe gated to L) or something D would actually want to see too? Start by
+rereading `beatDetector.js`'s `detectTempoSegments` header comment and
+`useAudioAnalyzer.js:55-86` — both already have unusually thorough
+"why" documentation that could seed this page's actual content.
+
+**Depends on:** Nothing technical. Needs a scope decision before design work.
+
+---
+
+### No "select all" for the track browser's REGEN/VOID/PUBLISH multi-select
+
+**Priority:** Low
+**Blocked by:** Nothing.
+
+**What:** Track selection (`selectedTrackIds`, `handleTrackSelect` in
+`ArchitectConsole.jsx`) is click-to-toggle per row only — no select-all
+checkbox, no shift-click range select. To force-regenerate every track in
+a vault (e.g. to backfill ZONES data on tracks analyzed before the
+2026-08-20 Dynamic Tempo Analysis shipped), you currently have to click
+every row's checkbox individually before hitting REGEN.
+
+**Why:** Surfaced 2026-08-21 while explaining how to get ZONES badges to
+actually appear across the existing catalog — the REGEN button
+(`arch-browser-utility`, both viewers) already does the right thing per
+selected track, but there's real friction getting a whole vault selected
+at catalog scale.
+
+**Context:** `selectedTrackIds` is a plain `Set` of ids; a "select all
+visible" toggle would just need to fill it with every id currently in
+`visibleTracks`/`filteredTracks`. Shift-click range select is a separate,
+slightly bigger addition (needs a "last clicked index" ref).
+
+**Depends on:** Nothing technical.
+
+---
+
+### Design constraint: instrument meters always keep black backgrounds
+
+**Priority:** N/A (constraint, not a bug) — log for future light-mode/theming work
+**Blocked by:** Nothing — this is a standing rule to remember, not a task to build.
+
+**What:** L confirmed (2026-08-21, during the "how hard would a light mode
+for D be" conversation): the VU meters, spectrum analyzer, and phase
+correlation meter keep their black backgrounds always, regardless of any
+future light theme. Only the chrome/shell around them (the achromatic
+CSS-token layer — `--void`, `--surface`, `--border`, `--text-primary`, etc.)
+would go light; the instrument faces themselves do not.
+
+**Why:** These are canvas-drawn instruments with colors baked directly into
+`ctx.fillStyle`/`ctx.strokeStyle` calls (`useAudioAnalyzer.js`, waveform
+draw loops in `DeckWaveformV2.jsx`), not CSS tokens — DESIGN.md's VU spec
+literally says "Base fill: Black `rgba(0,0,0,0.97)`." Retheming these to
+respond to a light mode would require threading theme-aware values into
+every canvas draw function — real engineering, not a token flip — and L's
+call is that it's not worth it: the instrument-face-stays-black identity is
+part of what makes it read as real hardware (matches the "hardware
+instrument with a screen" brand personality in PRODUCT.md), not something
+to soften for a lighter shell.
+
+**Context:** Directly relevant if/when a `[data-theme="d-light"]` (or
+similar) light-mode variant is ever built — see the light-mode feasibility
+discussion this session. The CSS/chrome layer would be comparatively cheap
+to retheme now specifically because this session's cleanup replaced ~127
+hardcoded `rgba(240,237,232,X)` literals with `--text-primary-rgb`/
+`--arch-fg-rgb` tokens — but the meters/waveform canvas colors were
+deliberately left as literals (correctly, per this constraint) and should
+stay that way.
+
+**Depends on:** Nothing technical. This is a design law to respect, not a
+build item.
+
+---
+
+### Guest-flow waveform art: PNG path doesn't scroll, contradicting the actual product plan
+
+**Priority:** High — this is a real gap between intended product behavior
+and what ships today, not a cosmetic issue.
+**Blocked by:** A decision on waveform-art architecture (see Context).
+
+**What:** The intended design (confirmed by L, 2026-08-21) is that the
+guest-flow waveform should **scroll as the mix plays** — the same scrolling
+zoomed-window behavior the console's `DeckWaveformV2` already does. To
+avoid making guests' browsers analyze full WAV files client-side, the
+decision was to pre-render a waveform image (PNG) per track and use it as
+static "art." But those PNGs are the *entire track's waveform compressed to
+fit one screen width* — a static full-track image, not a scrollable zoomed
+window. `WaveformImg` (`ListenerVaultView.jsx:404-459`) renders this PNG
+with only a CSS playhead line sliding across it — it never scrolls.
+Meanwhile `WaveformCanvas` (`ListenerVaultView.jsx:120-361`, the fallback
+used when a PNG is missing/fails) *does* do the real 200-bar centered
+scrolling zoom, matching the console. So which experience a guest gets
+depends entirely on whether that track happens to have a PNG or not —
+that's the actual product gap, not a bug in either path individually.
+
+**Also:** the legacy bass-color mapping in `seratoRgb()`
+(`ListenerVaultView.jsx:47-51`, bass→blue `#1464dc`) used for old-format
+waveform data is **confirmed wrong by L** — "obviously very wrong and
+shouldn't show anywhere." This isn't a case of reconciling two valid
+mappings; the blue-bass path should never render. Likely means: either
+regenerate old tracks' waveform data into the current bass/mid/high format,
+or strip color-coding entirely for any track still on the legacy shape
+until it's regenerated.
+
+**Why:** Surfaced during the guest-flow audit (2026-08-21) as what looked
+like a P2 color-consistency bug, but L's explanation revealed it's actually
+about the PNG-art architecture not delivering the "scroll while it plays"
+experience at all — the real product intent isn't being met, and different
+tracks show inconsistent experiences (scrolling vs. static) depending on
+upload history and PNG-generation version, not by design.
+
+**Context:** Needs a real architecture decision, not a patch: does the PNG
+approach get replaced with something that supports scrolling (e.g. a
+sprite-sheet / tiled PNG approach, or accepting a lightweight client-side
+analysis pass after all), or does the static-PNG-as-art approach get
+formally kept and the "scroll while it plays" plan revised? Relates
+directly to DESIGN.md's already-tracked "ListenerVaultView Waveform
+(Pending Upgrade)" note (targeted for Serato frequency-band rendering) —
+this is a bigger version of that same gap, not a separate one.
+
+**Depends on:** A product/architecture decision from L before any code
+changes. Don't just "fix" the color mismatch without addressing the
+underlying scroll-vs-static inconsistency.
+
+**Rollout note (2026-08-21):** once the architecture fix ships, every
+already-published track's existing PNG art is stale and needs regenerating
+against the new mechanism — regular publish/retract does NOT trigger this
+(that only toggles `is_published`, unrelated to waveform assets). The real
+mechanism is the console's multi-select REGEN button
+(`handleRegenSelected`/`ensureWaveformForTrack(track, false, true)` in
+`ArchitectConsole.jsx`), available to both D and L. Regenerating with
+today's code would just produce a fresher *squished* PNG — the fix and the
+regen have to land together, not regen-then-fix or fix-then-forget-to-regen.
+No "select all" exists yet either (separate TODO above), so a full-catalog
+regen means selecting every track's checkbox by hand until that ships.
+
+---
+
+### Bring the guest transport in line with the console's real transport style
+
+**Priority:** Medium
+**Blocked by:** Nothing technical.
+
+**What:** `StuderTransportBar.jsx` (dead code, unused since some earlier
+refactor) was deleted 2026-08-21 along with its orphaned CSS. It was L's
+original idea — D likes analog hardware aesthetics, and the plan was an
+"analog tape deck" look for the guest transport too. The live guest
+transport (`.lvv-transport`/`.lvv-mini-transport` in `ListenerVaultView.jsx`)
+is flat (transparent background, 1px borders) — it doesn't share the
+console's actual transport visual language.
+
+**Why:** The console's real transport buttons (`.arch-transport-btn`,
+`ArchitectConsole.css:1198-1276`) turned out to already be a deliberate
+beveled/mechanical-button style — `linear-gradient(180deg, #363636, #181818)`,
+layered `box-shadow` simulating a raised key, `transform: translateY(4px)`
+press-depth on `:active` — genuinely distinct from the
+flat god-btn family (CUE/LOOP/etc). L confirmed directly (2026-08-21): the
+guest transport should look the same as the console's transport, not a
+separate flat style.
+
+**Context:** Not a straight copy-paste — `StuderTransportBar`'s old attempt
+at this same idea had drifted from the current design system (wrong font,
+`var(--font-mono)` for word labels instead of Chakra Petch; DESIGN.md
+reserves mono strictly for numeric readouts). Whatever replaces
+`.lvv-transport`'s current flat styling should match the console's actual
+current values (gradient direction, shadow layers, press-depth animation,
+Chakra Petch font), not resurrect the old drifted version. See DESIGN.md's
+"Audio Transport (Guest Flow)" section, updated the same day this was
+logged.
+
+**Depends on:** Nothing technical — this is a straightforward CSS-matching
+task once picked up, not a design decision (the reference style already
+exists and is confirmed correct in the console).
+
+---
+
 ## Completed
 
 ### AudioContext leak + unthrottled waveform generation on upload

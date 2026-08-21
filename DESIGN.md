@@ -57,9 +57,9 @@ Note: Space Mono is kept in `--font-mono` only for genuine numeric data readouts
 :root {
   /* Foundation */
   --void:            #050505;   /* universal canvas */
-  --surface:         #0d0d0d;   /* panels, cards */
-  --surface-raised:  #141414;   /* modals, dropdowns */
-  --border:          #222222;   /* 1px structural borders */
+  --surface:         #141414;   /* panels, cards — widened 2026-08-21, was #0d0d0d */
+  --surface-raised:  #202020;   /* modals, dropdowns — widened 2026-08-21, was #141414 */
+  --border:          #2c2c2c;   /* 1px structural borders — widened 2026-08-21, was #222222 */
 
   /* Typography — ZERO WARMTH. Cold achromatic only. */
   --text-primary:    rgba(230, 230, 230, 0.92);  /* cold near-white — NO warmth */
@@ -228,7 +228,7 @@ The guest was invited — not discovering. Every design decision in this flow sh
 
 - **Hero:** Total runtime of all published mixes. 72–96px `--font-mono` (Space Mono, valid numeric readout surface). Format: `5:42` = 5 hours 42 minutes. The number IS the promise. No kicker — the number stands alone.
 - **Vault name:** Below the hero — vault label + session count at 8px Chakra Petch 600, 0.24em tracking, `--text-secondary`.
-- **No CTA button.** Entry is: `TOUCH ANYWHERE TO ENTER` — 10px Chakra Petch 500, 0.14em tracking, `rgba(240,237,232,0.35)` color. Breathes at `opacity: 0.35 ↔ 0.65` over `2.6s ease-in-out infinite`. An invitation, not a button.
+- **No CTA button.** Entry is: `TOUCH ANYWHERE TO ENTER` — 9px Chakra Petch 500, 0.26em tracking, `rgb(230,230,230)` (fully opaque, transparency handled by `opacity` alone). Breathes at `opacity: 0.55 ↔ 0.85` over `2.6s ease-in-out infinite` — raised 2026-08-21 from the original `0.35 ↔ 0.65` (which computed to ~2.7:1 against `--void`, failing WCAG AA) to a floor of ~5.2:1, same 0.30 breathing amplitude. An invitation, not a button.
 - **Background:** DPWallpaper canvas at full opacity. Permanent — same tessellation as entry. The wallpaper is the room, not a door.
 - **Layout:** Vertically centered content block. No wasted empty space — if it reads as "page failed to load," something is wrong.
 
@@ -339,9 +339,11 @@ Shipped 2026-07-24. Real Quantize, offline beat detection, and a multi-point bea
 | 60-70% | Red-orange | `#ff5500` |
 | 70-80% | Green | `#00ff00` |
 | 80-90% | Cyan | `#00ffff` |
-| 90-100% | Indigo | `#6600ff` |
+| 90-100% | Indigo | `#9d5cff` |
 
 Discrete bands, not a continuous gradient — matches the SA's own discrete-band treatment (frequency doesn't interpolate between band colors either). This is the one carve-out from the platform's general neutral-chrome rule for this specific badge; see "Meters vs. Chrome" above for why, and don't extend it to other tags/buttons without the same reasoning.
+
+**Indigo lightened 2026-08-21 (L's call, same hue):** the original `#6600ff` failed WCAG AA text contrast (2.78:1 on `--surface`) at the badge's small Space Mono size. `#9d5cff` keeps the exact same 264° hue — still unmistakably indigo, still verbatim-matched to the SA's own High-band anchor (`useAudioAnalyzer.js`'s `specBarColor`, updated alongside) — just lightened enough to clear AA with real margin (5.01:1 on `--surface`, 5.22:1 on `--arch-surface`), matching how the 2026-08-14 text-token fix was done (brightened past the floor, not to it).
 
 **Double/halve octave-correction control:** full `god-btn` pattern — `background: transparent`, `border: 1px solid var(--border)`, Chakra Petch 500 11px 0.12em uppercase, hover → `border-color`/`color: var(--identity)`, 28px height desktop. Corrects the known DP-beat-tracker octave-ambiguity failure mode (90 vs 180 BPM reading equally strong). Renders in both track-list rows AND the loaded-deck header (`arch-deck-stats`) as of 2026-08-20 — previously deck-header-only tracks required leaving the deck view to find their row in the list below.
 
@@ -530,15 +532,13 @@ Post-auth vault screen. Full-screen dark surface. Same rules as console: hard ed
 
 ---
 
-## Audio Transport (StuderTransportBar)
+## Audio Transport (Guest Flow)
 
-Visual metaphor: Studer A800 tape deck. Hardware readout. Post-auth surface.
+**Removed 2026-08-21:** `StuderTransportBar.jsx` (the "Studer A800 tape deck" component this section used to document) was dead code — imported nowhere, confirmed via repo-wide grep — and has been deleted along with its orphaned CSS (`.studer-transport`, `.transport-controls`, `.transport-btn`, `.pitch-*`). It was L's original idea (D likes analog hardware aesthetics) but got lost when the real guest transport was built separately.
 
-- **Container:** `--surface` (#0d0d0d) background. `border-top: 1px solid --border`. Fixed or sticky at bottom of vault screen.
-- **Transport controls:** PLAY / STOP / REW / FF / PAUSE / REC. `transport-btn` class: Chakra Petch 500, 10px, 0.12em tracking, 1px `--border` border. Active: `--identity` fill or accent border.
-- **REC button:** `--record-red` (#cc2200) border when armed. `rec-pulse` animation at 1.6s ease-in-out (slow heartbeat, matches DESIGN.md motion spec).
-- **Status readout:** Track title at 11px Chakra Petch 500. BPM and duration via `--font-mono` (Space Mono, tabular-nums). This is one of 3 valid mono surfaces (the others: BPM nixie in upload modal, telemetry timestamps).
-- **Pitch fader:** Range input styled with no rounded thumb. Hidden on mobile (< 640px).
+**What's actually live:** `.lvv-transport` / `.lvv-mini-transport` in `ListenerVaultView.jsx` — flat, `--surface` background, 1px borders, Chakra Petch labels, `--vault-color` accent. Functionally correct, but visually flat rather than matching the console's actual transport language.
+
+**Known gap (tracked in TODOS.md):** the console's real transport (`.arch-transport-btn`, `ArchitectConsole.css:1198-1276`) uses a distinct beveled/mechanical-button style — `linear-gradient(180deg, #363636, #181818)`, layered `box-shadow` simulating a raised key, `transform: translateY(4px)` press-depth on `:active` — deliberately different from the flat `god-btn` family used for CUE/LOOP. The guest transport doesn't share this language yet. Bringing it in line (same gradient/shadow/press-depth, Chakra Petch, no font-law violations) is queued as future work, not done as part of this cleanup.
 
 ---
 
@@ -630,6 +630,10 @@ INTAKE is a console-level action. The button lives in the browser utility bar (`
 | 2026-08-16 | Console-wide button/discoverability audit executed (the initiative TODOS.md had been tracking since 2026-08-11): HISTORY filter rewired (was bound to an unrelated Settings preference, not `publishFilter`), individual hot-cue clear shipped for all 4 banks (see Hot Cues section above), COMMS keyword-help made findable (placeholder + `HELP` topic), `?` shortcuts trigger added (previously keypress-only), beatgrid idle hint added (see Beatgrid section above), Smart Crates implemented for real (see Smart Crates section above), ~25 previously-undocumented controls got tooltips, ACCESS CODES REVOKE gained a confirm dialog (previously immediate/irreversible with zero warning) | Full accounting of every finding (chosen and not) is in the build plan; nothing was dropped silently. Two items were deliberately scoped out as non-documentation questions rather than built: the octave-correction UX gap (behavior change, new TODOS.md entry) and D's ability to reach admin-tier rail panels (CMD MATRIX/ACCESS CODES/VOID PROTOCOL/ARCHIVE LOG) — L confirmed directly this is intentional, not an oversight: D has full access if he needs it but the admin side isn't meant to be part of his regular workflow, L runs that side. ARCHIVE LOG's "Architect access only" panel text was corrected to match — it was overstating a restriction that doesn't actually exist. |
 | 2026-08-19 | Hot cue banks: chronological auto-sort (toggle, default ON) across a continuous 32-slot sequence; bank identity moved from numerals to a triangle glyph (orientation = A/B vs C/D, solid/hollow fill = which bank in the pair); every bank gained D-bank's rename-on-double-click | Researched Serato/Rekordbox before building — Serato ships an actual "Sort Cues and Loops Chronologically" preference, confirming the sort request wasn't a novelty; Serato differentiates same-type cues by color alone, but PSC's hue channel (`ALL_CUE_COLORS`) is already spent per-cue, so bank identity needed shape instead. Labeling a cue pins it (excluded from auto-sort, frozen slot) — L's own resolution to the "does a named cue drift?" question, and the direct mitigation for auto-sort's live-reflow-during-a-set risk. |
 | 2026-08-20 | Dynamic Tempo Analysis: ZONES badge (real measured drift) + genre-aware DYNAMIC/BREAKBEAT/HOUSE/TECHNO badge replace the single-tempo CONF badge's implicit "one true BPM" assumption; octave-control threshold split into `{dynamic: 0.35, static: 0.6}` by genre bucket; badge coexistence resolved as "Genre Dims" (40% opacity, not full/suppressed) | Root cause (research-confirmed against D directly, not guessed): the confidence score measures rhythmic rigidity via autocorrelation — funk/soul's real, researched *microtiming*/"groove" genuinely autocorrelates worse without being wrong, so raising confidence on that material would mean quantizing away the groove. Rekordbox's real answer to this exact material (funk/disco/live sets) is a separate Dynamic analysis mode, not a better single-tempo number — this maps directly onto the codebase's own already-shipped `detectTempoSegments`, previously unsurfaced. Empirically grounded (not guessed): a new jittered funk archetype in the validation fixtures proves microtiming lowers confidence (0.907→0.591) without shifting detected BPM or triggering false drift detection. Does **NOT** touch `DETECTED_BPM_CONFIDENCE_THRESHOLD` or `DRIFT_THRESHOLD_PCT` (real measured drift and displayed-BPM gating stay evidence-only, unchanged) and does **NOT** revert the 2026-08-15 CONF color-band decision (still active whenever CONF itself renders). |
+| 2026-08-21 | Foundation depth widened: `--surface` #0d0d0d→#141414, `--surface-raised` #141414→#202020, `--border` #222222→#2c2c2c (`--void` unchanged) | D and L independently called the console "too dark and basement-y." The four levels sat within ~30 points of each other — no perceptible depth between void/panel/modal, reading as one flat black mass. Widened the spacing (not the achromatic philosophy itself); text contrast re-verified, still clears AA with margin (`--text-muted` at 4.72:1 on the new `--surface-raised`). |
+| 2026-08-21 | D's/L's theme `--surface` overrides fixed: `#050805`→`#141714` (D), `#070a0d`→`#14171a` (L) | Found while making the depth-widening fix above: both per-theme overrides were DARKER than even the old global default, silently reverting the console to basement-black the instant either owner logged in. This was very likely the actual root cause of the complaint, not the global token. Same faint hue tilt preserved (green for D, cool/blue for L), just lifted to the new base. |
+| 2026-08-21 | Identity atmosphere added: low-opacity radial wash of `--identity` color across `.universe`'s background, gated to `[data-theme]` only (never pre-auth) | Addresses the deeper "no personality, generic dark box" complaint, distinct from the literal-darkness fix above — the console previously had zero identity color anywhere except specific accented elements. A subtle ambient wash (6% opacity radial gradient) makes the whole session feel like D's or L's own space without touching the "no color pre-auth" entry-screen law or turning chrome non-neutral. Lightweight version of the already-planned "per-Master custom theming" direction, done now rather than waiting for full theming. |
+| 2026-08-21 | Hot-cue pads (`.arch-hotcue`) upgraded to genuinely match `.arch-transport-btn`'s tactile hardware depth (gradient background, outer drop-shadow, deeper press-down on `:active`) — a third instance of the "hardware" button family alongside TRANSPORT | These are modeled directly on D's own AKAI MPC pads — the flat `god-btn` language (used for CUE/LOOP/browser utility) was never the right fit for them. Kept dimmer than TRANSPORT at rest (idle/unlit pad vs. an always-live control); the existing `.has-cue` color-glow overlay is unchanged. See "God-btn pattern" and console button-family notes below for the now-formalized two-and-a-half-family system: flat (CUE/LOOP/utility), hardware (TRANSPORT, hot-cue pads). |
 
 ---
 

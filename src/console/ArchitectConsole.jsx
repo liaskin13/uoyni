@@ -52,6 +52,17 @@ const isV2Sentinel = (waveformData) => {
     return false;
   }
 };
+
+// Dynamic Tempo Analysis (ZONES badge, genre-aware CONF thresholds) shipped
+// 2026-08-20 — tracks whose waveform_generated_at predates this ran the
+// older single-tempo pipeline and never got a chance to detect real tempo
+// drift, even if they'd genuinely qualify for ZONES. No new DB column
+// needed: waveform_generated_at (migration 0008) already tells us when a
+// track was last analyzed; this just compares it against the ship date.
+export const DYNAMIC_TEMPO_ANALYSIS_SHIPPED_AT = "2026-08-20T00:00:00.000Z";
+export const isAnalysisStale = (track) =>
+  !!track?.waveform_generated_at &&
+  new Date(track.waveform_generated_at) < new Date(DYNAMIC_TEMPO_ANALYSIS_SHIPPED_AT);
 import { R2_PUBLIC_URL } from "../config";
 
 const cleanBpm = (str) =>
@@ -277,7 +288,7 @@ export function confidenceBadgeColor(confidence) {
   if (pct < 70) return "#ff5500";
   if (pct < 80) return "#00ff00";
   if (pct < 90) return "#00ffff";
-  return "#6600ff";
+  return "#9d5cff";
 }
 
 // Shared CONF badge — used both in track-list rows and the loaded-deck
@@ -2579,37 +2590,45 @@ function ArchitectConsole({
     announce(`Loop ${option.label}.`);
   };
 
-  const filteredTracks = trackListData
-    .filter((t) => t.vault === activeLibVault)
-    .filter(
-      (t) =>
-        !libSearch ||
-        t.title?.toLowerCase().includes(libSearch.toLowerCase()) ||
-        t.artist?.toLowerCase().includes(libSearch.toLowerCase()),
-    )
-    .filter((t) =>
-      publishFilter === "all"
-        ? true
-        : publishFilter === "staged"
-          ? !t.is_published
-          : Boolean(t.is_published),
-    );
+  const filteredTracks = useMemo(
+    () =>
+      trackListData
+        .filter((t) => t.vault === activeLibVault)
+        .filter(
+          (t) =>
+            !libSearch ||
+            t.title?.toLowerCase().includes(libSearch.toLowerCase()) ||
+            t.artist?.toLowerCase().includes(libSearch.toLowerCase()),
+        )
+        .filter((t) =>
+          publishFilter === "all"
+            ? true
+            : publishFilter === "staged"
+              ? !t.is_published
+              : Boolean(t.is_published),
+        ),
+    [trackListData, activeLibVault, libSearch, publishFilter],
+  );
 
-  const visibleTracks = [...filteredTracks].sort((a, b) => {
-    if (smartCrates && loadedTrack) {
-      const scoreDiff =
-        smartCrateScore(b, loadedTrack) - smartCrateScore(a, loadedTrack);
-      if (scoreDiff !== 0) return scoreDiff;
-    }
-    if (sortMode === "bpm-desc")
-      return (resolveTrackBpm(b) || 0) - (resolveTrackBpm(a) || 0);
-    if (sortMode === "bpm-asc")
-      return (resolveTrackBpm(a) || 0) - (resolveTrackBpm(b) || 0);
-    return (
-      new Date(b.created_at || 0).getTime() -
-      new Date(a.created_at || 0).getTime()
-    );
-  });
+  const visibleTracks = useMemo(
+    () =>
+      [...filteredTracks].sort((a, b) => {
+        if (smartCrates && loadedTrack) {
+          const scoreDiff =
+            smartCrateScore(b, loadedTrack) - smartCrateScore(a, loadedTrack);
+          if (scoreDiff !== 0) return scoreDiff;
+        }
+        if (sortMode === "bpm-desc")
+          return (resolveTrackBpm(b) || 0) - (resolveTrackBpm(a) || 0);
+        if (sortMode === "bpm-asc")
+          return (resolveTrackBpm(a) || 0) - (resolveTrackBpm(b) || 0);
+        return (
+          new Date(b.created_at || 0).getTime() -
+          new Date(a.created_at || 0).getTime()
+        );
+      }),
+    [filteredTracks, smartCrates, loadedTrack, sortMode],
+  );
 
   const hasHotCuesForLoadedTrack = !!(
     loadedTrack && activeTrackCuesRaw.length
@@ -3107,7 +3126,7 @@ function ArchitectConsole({
     ctx.clearRect(0, 0, w, ENVELOPE_ROW_H);
 
     const drawHint = (text) => {
-      ctx.font = "8px 'JetBrains Mono', monospace";
+      ctx.font = "8px 'Space Mono', monospace";
       ctx.fillStyle = "rgba(240,237,232,0.32)";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
@@ -3297,7 +3316,7 @@ function ArchitectConsole({
                       {showBoth && (
                         <span
                           style={{
-                            color: "rgba(240,237,232,0.7)",
+                            color: "rgba(var(--arch-fg-rgb), 0.7)",
                             marginLeft: 4,
                             fontWeight: 500,
                           }}
@@ -3369,7 +3388,6 @@ function ArchitectConsole({
         {/* Full-width track overview strip */}
         <div
           className="arch-overview-row"
-          aria-hidden="true"
           title="Click to seek. Hover here and press ↑↓ to cycle overview render style (LAYERS/OUTLINE/TRACES)."
           style={{ position: "relative" }}
           onMouseEnter={() => { overviewHoveredRef.current = true; }}
@@ -3378,6 +3396,7 @@ function ArchitectConsole({
           <canvas
             ref={overviewRef}
             className="arch-overview-strip"
+            aria-label="Track overview — click to seek"
             onClick={deckCanSeek ? (e) => {
               const rect = overviewRef.current.getBoundingClientRect();
               handleSeek(((e.clientX - rect.left) / rect.width) * audioDuration);
@@ -3388,14 +3407,14 @@ function ArchitectConsole({
             position: "absolute", top: 2, right: 6,
             fontSize: "8px", letterSpacing: "0.12em",
             color: "rgba(255,255,255,0.5)", pointerEvents: "none",
-            fontFamily: "'JetBrains Mono', monospace",
+            fontFamily: "'Space Mono', monospace",
           }}>
             {OVERVIEW_STYLES[overviewStyle]} ↑↓
           </span>
         </div>
 
         {/* Waveform row — full width (VU moved to analyzer row) */}
-        <div className="arch-waveform-row" aria-hidden="true">
+        <div className="arch-waveform-row">
           <div className="arch-waveform-col">
             <div
               className="arch-waveform-main"
@@ -3414,7 +3433,7 @@ function ArchitectConsole({
                     top: 4,
                     right: 6,
                     zIndex: 1,
-                    fontFamily: "'JetBrains Mono', monospace",
+                    fontFamily: "'Space Mono', monospace",
                     fontSize: "0.45rem",
                     letterSpacing: "0.08em",
                     color: "rgba(255,255,255,0.22)",
@@ -3467,7 +3486,6 @@ function ArchitectConsole({
             controls visibility, not waveform hover. */}
         <div
           className={`arch-envelope-row${beatDetectVisible ? " arch-envelope-row--open" : ""}`}
-          aria-hidden="true"
         >
           <canvas
             ref={envelopeCanvasRef}
@@ -3819,7 +3837,9 @@ function ArchitectConsole({
           SPACE play/pause&nbsp;&nbsp;·&nbsp;&nbsp;L
           load&nbsp;&nbsp;·&nbsp;&nbsp;` cue&nbsp;&nbsp;·&nbsp;&nbsp;1–8
           pads&nbsp;&nbsp;·&nbsp;&nbsp;← → seek 1 beat&nbsp;&nbsp;·&nbsp;&nbsp;↑
-          ↓ zoom (hover waveform/overview)&nbsp;&nbsp;·&nbsp;&nbsp;ESC
+          ↓ zoom (hover waveform/overview)&nbsp;&nbsp;·&nbsp;&nbsp;(focus
+          waveform) [ ] select beatgrid anchor, ← → nudge it (+Shift = 1
+          bar)&nbsp;&nbsp;·&nbsp;&nbsp;ESC
           dismiss&nbsp;&nbsp;·&nbsp;&nbsp;? close
         </div>
       )}
@@ -4511,7 +4531,7 @@ function ArchitectConsole({
                         {regeneratingWaveforms[t.id] ? (
                           <span
                             style={{
-                              color: "rgba(240,237,232,0.5)",
+                              color: "rgba(var(--arch-fg-rgb), 0.5)",
                               fontSize: "0.55rem",
                               fontFamily: "'Chakra Petch', monospace",
                               letterSpacing: "0.08em",
@@ -4526,10 +4546,16 @@ function ArchitectConsole({
                           isV2Sentinel(t.waveform_data) ? (
                           <span
                             style={{
-                              color: "rgba(0,204,102,0.7)",
+                              color: isAnalysisStale(t)
+                                ? "rgba(255,170,0,0.75)"
+                                : "rgba(0,204,102,0.7)",
                               fontSize: "0.55rem",
                             }}
-                            title="Waveform ready (V2)"
+                            title={
+                              isAnalysisStale(t)
+                                ? "Waveform ready, but analyzed before Dynamic Tempo Analysis (ZONES/genre) shipped — REGEN to pick it up"
+                                : "Waveform ready (V2, current analysis)"
+                            }
                           >
                             ▪
                           </span>
@@ -4537,7 +4563,7 @@ function ArchitectConsole({
                           t.waveform_data !== WAVEFORM_V2_SENTINEL ? (
                           <span
                             style={{
-                              color: "rgba(240,237,232,0.3)",
+                              color: "rgba(var(--arch-fg-rgb), 0.3)",
                               fontSize: "0.55rem",
                             }}
                             title="V1 only — V2 queued"
@@ -4547,7 +4573,7 @@ function ArchitectConsole({
                         ) : (
                           <span
                             style={{
-                              color: "rgba(240,237,232,0.2)",
+                              color: "rgba(var(--arch-fg-rgb), 0.2)",
                               fontSize: "0.55rem",
                             }}
                             title="No waveform generated yet"
@@ -4996,7 +5022,7 @@ function ArchitectConsole({
                   className="arch-settings-row"
                   title="Snap hot-cue placement and beatgrid edits to the nearest beat"
                 >
-                  <span>Quantize</span>
+                  <span>Quantize Default</span>
                   <button
                     className={`arch-settings-toggle ${quantizeEnabled ? "active" : ""}`}
                     onClick={() => setQuantizeEnabled((p) => !p)}
@@ -5031,7 +5057,7 @@ function ArchitectConsole({
                     onClick={() => setSmartCrates((p) => !p)}
                     aria-pressed={smartCrates}
                   >
-                    {smartCrates ? "ENABLED" : "DISABLED"}
+                    {smartCrates ? "ON" : "OFF"}
                   </button>
                 </div>
                 <div
@@ -5044,7 +5070,7 @@ function ArchitectConsole({
                     onClick={() => setHistoryEnabled((p) => !p)}
                     aria-pressed={historyEnabled}
                   >
-                    {historyEnabled ? "ENABLED" : "DISABLED"}
+                    {historyEnabled ? "ON" : "OFF"}
                   </button>
                 </div>
               </section>

@@ -115,7 +115,7 @@
 }
 
 .entry-request-input:focus-visible {
-  outline: 2px solid rgba(240, 237, 232, 0.75);
+  outline: 2px solid rgba(var(--text-primary-rgb), 0.75);
   outline-offset: 2px;
 }
 
@@ -178,7 +178,7 @@
   font-family: var(--font-display);
   font-size: 0.55rem;
   letter-spacing: 0.18em;
-  color: rgba(240, 237, 232, 0.35);
+  color: rgba(var(--text-primary-rgb), 0.35);
   margin: 0;
   text-align: right;
 }
@@ -338,6 +338,19 @@
   align-items: center;
   overflow: hidden;
   position: relative;
+}
+
+/* Identity atmosphere (2026-08-21) — a very low-opacity wash of D's/L's
+   own identity color across the shell background, not just accent
+   elements. Addresses the deeper "basement-y, no personality" complaint
+   (distinct from the depth-level fix above): the console reads as generic
+   dark-box territory until identity color happens to touch something.
+   Scoped to [data-theme] only — .universe alone (pre-auth entry) stays
+   pure, zero-color void per DESIGN.md's entry-screen law. */
+[data-theme] .universe {
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 20%, rgba(var(--identity-rgb, 0, 0, 0), 0.06), transparent 65%),
+    var(--void-black, #050505);
 }
 
 .cockpit {

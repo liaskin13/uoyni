@@ -327,7 +327,7 @@ export default function DeckWaveformV2({
       const timeToX = (t) => ((t * BARS_PER_SEC - startBar) / (endBar - startBar)) * w;
 
       if (segments.length > 0) {
-        ctx.font      = "7px 'JetBrains Mono', monospace";
+        ctx.font      = "7px 'Space Mono', monospace";
         ctx.fillStyle = "rgba(255,255,255,0.32)";
         ctx.textAlign = "center";
 
@@ -431,7 +431,7 @@ export default function DeckWaveformV2({
           // once discovered. Same idle-hint treatment as the onset-envelope
           // row's "HOVER WAVEFORM TO INSPECT ENVELOPE" (console-wide
           // button/discoverability audit, 2026-08-16).
-          ctx.font = "7px 'JetBrains Mono', monospace";
+          ctx.font = "7px 'Space Mono', monospace";
           ctx.textAlign = "center";
           ctx.fillStyle = "rgba(160,160,160,0.85)";
           ctx.fillText("DOUBLE-CLICK TO SET BEATGRID", w / 2, 9);
@@ -440,7 +440,7 @@ export default function DeckWaveformV2({
 
         // ─── Transient "PAUSE TO EDIT GRID" cue ──────────────────────────
         if (pauseGateLabelRef.current.show) {
-          ctx.font = "7px 'JetBrains Mono', monospace";
+          ctx.font = "7px 'Space Mono', monospace";
           ctx.textAlign = "center";
           ctx.fillStyle = "rgba(160,160,160,0.85)";
           ctx.fillText("PAUSE TO EDIT GRID", pauseGateLabelRef.current.x, Math.max(12, pauseGateLabelRef.current.y));
@@ -454,7 +454,7 @@ export default function DeckWaveformV2({
                     : secondsVisible > 40  ? 15
                     : secondsVisible > 15  ? 5
                     : secondsVisible > 5   ? 2 : 1;
-      ctx.font      = "7px 'JetBrains Mono', monospace";
+      ctx.font      = "7px 'Space Mono', monospace";
       ctx.textAlign = "center";
       ctx.lineWidth = 1;
       for (let sec = Math.ceil(startTimeSec); sec <= Math.floor(endTimeSec); sec++) {
@@ -497,13 +497,13 @@ export default function DeckWaveformV2({
         if (isB2) {
           ctx.beginPath(); ctx.moveTo(x - 6, h); ctx.lineTo(x + 6, h); ctx.lineTo(x, h - 12); ctx.closePath(); ctx.stroke();
           ctx.fillStyle = color;
-          ctx.font      = "bold 7px JetBrains Mono, monospace";
+          ctx.font      = "bold 7px 'Space Mono', monospace";
           ctx.fillText(num, x, h - 4);
         } else {
           ctx.fillStyle = color;
           ctx.beginPath(); ctx.moveTo(x - 6, 0); ctx.lineTo(x + 6, 0); ctx.lineTo(x, 12); ctx.closePath(); ctx.fill();
           ctx.fillStyle = "#000";
-          ctx.font      = "bold 7px JetBrains Mono, monospace";
+          ctx.font      = "bold 7px 'Space Mono', monospace";
           ctx.fillText(num, x, 10);
         }
       });

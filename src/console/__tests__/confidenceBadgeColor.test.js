@@ -37,8 +37,8 @@ describe("confidenceBadgeColor", () => {
   });
 
   it("bands 90-100% as indigo, boundary inclusive at exactly 90%", () => {
-    expect(confidenceBadgeColor(0.9)).toBe("#6600ff");
-    expect(confidenceBadgeColor(1)).toBe("#6600ff");
+    expect(confidenceBadgeColor(0.9)).toBe("#9d5cff");
+    expect(confidenceBadgeColor(1)).toBe("#9d5cff");
   });
 
   it("treats missing/null confidence as 0 (red)", () => {

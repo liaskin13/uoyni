@@ -5,16 +5,23 @@
   /* ── FOUNDATION (canonical) ──────────────────────── */
   --void: #050505;
   /* universal canvas */
-  --surface: #0d0d0d;
-  /* panels, cards */
-  --surface-raised: #141414;
+  --surface: #141414;
+  /* panels, cards — widened from #0d0d0d 2026-08-21: void/surface/
+     surface-raised/border sat within ~30 points of each other, reading as
+     one flat black mass ("too dark and basement-y" — D and L both). Text
+     contrast re-verified against the new values: text-muted still clears
+     4.72:1 on --surface-raised. */
+  --surface-raised: #202020;
   /* modals, dropdowns */
-  --border: #222222;
+  --border: #2c2c2c;
   /* 1px structural borders */
 
   /* ── TYPOGRAPHY (canonical) ──────────────────────── */
   --text-primary: #f0ede8;
   /* warm off-white */
+  --text-primary-rgb: 240, 237, 232;
+  /* rgb triplet of --text-primary, for rgba() alpha variants —
+     replaces ad hoc rgba(240,237,232,X) literals scattered across CSS */
   --text-secondary: #999999;
   /* ~7.15:1 on --void — comfortably above WCAG AA (was #7a7a7a at ~4.5:1,
      technically passing but murky; brightened 2026-08-14 for real-world
@@ -153,18 +160,25 @@
 /* ── D's THEME — 70s Soul ──────────────────────────── */
 [data-theme="d-soul"] {
   --identity: #14dc14;
+  --identity-rgb: 20, 220, 20;
   --identity-dim: rgba(20, 220, 20, 0.10);
   --identity-glow: 0 0 24px rgba(20, 220, 20, 0.22);
-  --surface: #050805;
+  --surface: #141714;
+  /* was #050805 — this was DARKER than even the old global --surface
+     default, so D's own theme was silently overriding the 2026-08-21
+     depth fix back to basement-black every time he logged in. Same
+     faint green tilt (G channel +3), lifted to match the new base. */
   --text-primary: #f0ede8;
 }
 
 /* ── L's THEME — Architect ─────────────────────────── */
 [data-theme="l-architect"] {
   --identity: #00e5ff;
+  --identity-rgb: 0, 229, 255;
   --identity-dim: rgba(0, 229, 255, 0.12);
   --identity-glow: 0 0 24px rgba(0, 229, 255, 0.22);
-  --surface: #070a0d;
-  /* cold near-black */
+  --surface: #14171a;
+  /* was #070a0d, same issue as D's theme above — lifted to match the new
+     base, same faint cool tilt (B channel +6, G +3) preserved. */
   --studer-copper: #00e5ff;
 }
