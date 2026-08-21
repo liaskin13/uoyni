@@ -1,8 +1,39 @@
 # Next Session — Resume Here
 
-**Last updated:** 2026-08-21 — Loop-viewport-lock plan approved + eng-reviewed CLEAR, implementation NOT started.
+**Last updated:** 2026-08-21 (later same day) — Copilot disaster recovery +
+console/guest-flow impeccable audits (13→19/20, 11→20/20) + darkness/button
+design pass, all shipped live (v1.5.1.0, commits `728193e`/`aec60c7`). The
+loop-viewport-lock plan below is from EARLIER in the day and is still
+untouched — this session never got to it.
 
-## 🔧 START HERE — Loop-viewport-lock: planned + eng-reviewed, ready to build
+## 🆕 THIS SESSION'S OPEN THREADS (2026-08-21, later)
+
+- **High priority TODO**: guest-flow's PNG waveform art doesn't actually
+  scroll while playing (contradicts the "scroll as it plays" design intent)
+  — needs an architecture decision from L before touching code. See
+  TODOS.md "Guest-flow waveform art: PNG path doesn't scroll..." The
+  legacy bass→blue color bug is part of the same finding, confirmed wrong,
+  don't patch it in isolation.
+- **Medium priority TODO**: bring the guest-flow transport's styling in
+  line with the console's real tactile TRANSPORT look (console's version
+  was found to already be beveled/press-depth, guest's is still flat).
+- Smaller open TODOS: no "select all" for track-browser multi-select, and
+  the "show your work" math-explainability page L wants (see per-track
+  BPM/CONF/ZONES calculation reasoning, not just the resolved output).
+- `.claude/skills/impeccable/` is now installed and working (wasn't
+  before — a prior session's `/impeccable` invocation was silently
+  failing because the skill was never copied in). It's currently
+  untracked in git; consider committing it so future sessions don't have
+  to reinstall.
+- L may still be running `/design-consultation` in a separate window
+  continuing the console darkness/button-family conversation — check
+  before assuming that thread is closed.
+- Full checkpoint with everything from this session:
+  `~/.gstack/projects/liaskin13-psoulc/checkpoints/20260821-copilot-disaster-recovery-plus-double-audit.md`
+
+---
+
+## 🔧 EARLIER (same day) — Loop-viewport-lock: planned + eng-reviewed, ready to build
 
 Root-caused L's "loop feels sticky, not smooth" complaint (the follow-up to
 2026-08-20's `computeSmoothedPlayhead` fix, which was real but unproven as
