@@ -2,6 +2,62 @@
 
 All notable changes to Pleasant Soul Collective will be documented in this file.
 
+## [1.5.1.0] - 2026-08-21
+
+### Fixed
+
+- **Console health audit: 13/20 → 19/20.** The waveform/scrubber/beatgrid
+  surface was `aria-hidden` on the console despite carrying real
+  click/drag interactions — genuinely built keyboard support underneath
+  (arrow-key beatgrid nudging) was silently switched off by the wrapper
+  around it. Fixed, and the on-screen `?` shortcut legend now actually
+  lists it. Three fonts (IBM Plex Sans, Sora, JetBrains Mono) were
+  declared throughout the console and admin panel but never loaded —
+  every label using them was silently falling back to whatever font each
+  visitor's OS happened to default to. Replaced with the real design
+  tokens everywhere. The CONF confidence badge's top color band failed
+  text-contrast standards (2.78:1, needs 4.5:1) — nudged to a lighter
+  shade of the same hue (5:1+) without breaking its intentional match to
+  the Spectrum Analyzer's palette
+- **Guest/listener flow health audit: 11/20 → 20/20.** The vault-landing
+  "tap anywhere to enter" screen — the *only* way into a vault by design —
+  had zero keyboard path, meaning keyboard and switch-device users
+  couldn't get in at all. Fixed. A CSS rule collision was silently
+  shrinking every touch target below the accessibility floor on real
+  iPhones. Waveform seeking (both renderers) gained real keyboard support
+  (arrow keys ± 5s, Shift ± 30s, Home/End). Found and fixed a real,
+  previously-undetected crash: the waveform's fallback renderer (used
+  whenever a track has no pre-rendered art yet) threw on every single
+  render due to a variable being referenced before it was defined — this
+  had zero test coverage before now, so it could have been silently
+  breaking playback for real guests. A regression test was added and
+  verified to actually catch the exact failure
+- Removed `StuderTransportBar.jsx` — a fully-built, styled component that
+  hadn't been wired into anything in a long time, along with all its
+  orphaned CSS
+- The REGEN button's progress indicator used to freeze at 5% for the
+  entire (and often longest) part of waveform analysis on large files,
+  then jump straight to done — the per-chunk progress reporting was built
+  but never actually connected. Fixed; it now climbs the whole way
+- Track rows now show an amber vs. green indicator for whether their
+  waveform analysis predates the newer tempo-detection system, so it's
+  visible at a glance which tracks would benefit from a re-analyze
+
+### Changed
+
+- Widened the gap between the console's darkest surface levels — void,
+  panel, and modal previously sat close enough together to read as one
+  flat black mass. Also found and fixed the actual root cause of the
+  console feeling unusually dark: both D's and L's personal theme
+  overrides were quietly *darker* than the shared default, silently
+  undoing any global depth work the moment either of them logged in
+- Added a very faint wash of each owner's own identity color across the
+  console background (not just accent elements) — off before login,
+  on after
+- Hot-cue pads now share the same tactile, "real hardware button" weight
+  as the transport controls (press-down feel, layered shadow) instead of
+  a flatter, generic button style
+
 ## [1.5.0.0] - 2026-08-19
 
 ### Added
