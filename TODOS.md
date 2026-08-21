@@ -1396,6 +1396,40 @@ exists and is confirmed correct in the console).
 
 ---
 
+### Run /plan-eng-review on the approved "Show Your Work" math-panel plan
+
+**Priority:** Medium — do this before starting implementation, not after.
+**Blocked by:** Nothing technical.
+
+**What:** The "Show Your Work" tempo/confidence diagnostics panel plan
+(2026-08-21) went through Explore + Plan-agent design and was approved via
+`ExitPlanMode`, but has NOT been through `/plan-eng-review` — the
+independent outside-voice pass this project's own lessons.md explicitly
+flags as catching real regressions that self-review alone misses (see the
+loop-viewport-lock plan's own history: a 4-section self-review felt
+complete, the outside-voice pass still found a real bug).
+
+**Why:** Same reasoning applies here as it did there — a plan involving a
+new data pipeline (R2 blob, new worker route, extended `beatDetector.js`
+return shapes) is exactly the kind of multi-file, architectural change
+where an independent second pass is worth running before code gets
+written, not just before it ships.
+
+**Context:** Plan file: `~/.claude/plans/wise-conjuring-taco.md`. Full
+recommended approach: opt-in `includeDiagnostics` flag on
+`dpBeatTrack`/`estimateTempoPeriod` (`src/lib/beatDetector.js`), a new
+`buildDiagnosticsPayload` helper in `src/lib/waveformAnalyzer.js`, a third
+optional R2 blob via the existing `waveform-assets` upload endpoint
+(deliberately NOT a new D1 column, to avoid this project's manual
+Cloudflare-dashboard migration gate), and a new inline-expand
+`MathPanel.jsx` triggered from the CONF/ZONES badges. 6-task breakdown
+(T1-T6) already in the plan file.
+
+**Depends on:** Nothing technical — this is a process step, not a design
+decision. Run before T1.
+
+---
+
 ## Completed
 
 ### AudioContext leak + unthrottled waveform generation on upload
